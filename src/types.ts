@@ -22,6 +22,9 @@ export interface CaseSummary {
   age: number
   status: CaseStatus
   chiefComplaint: string
+  symptomsText?: string
+  diagnosisText?: string
+  createdAt: string
   updatedAt: string
   doctorName: string
   tags?: string[]
@@ -45,6 +48,7 @@ export interface CaseMessage {
   content: string
   createdAt: string
   source?: SuggestionSource
+  citations?: Citation[]
 }
 
 export interface ConsultationSuggestion {
@@ -60,8 +64,19 @@ export interface ConsultationSuggestion {
 export interface UserSummary {
   id: string
   name: string
+  username?: string
+  realName?: string
   role: UserRole
   status: 'active' | 'suspended'
+  org?: string
+  region?: string
+  phone?: string
+  email?: string
+  note?: string
+  registeredAt?: string
+  lastLoginAt?: string
+  registerIp?: string
+  lastLoginIp?: string
   createdAt: string
   lastActive: string
 }
@@ -81,4 +96,86 @@ export interface AuditLogEntry {
   target: string
   createdAt: string
   severity: 'info' | 'warning'
+}
+
+export interface Patient {
+  id: string
+  name: string
+  gender?: '男' | '女'
+  age?: number
+  birthday?: string
+  region?: string
+  phone?: string
+  email?: string
+  note?: string
+  doctorName?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MedicalCaseSummary {
+  id: string
+  doctorName?: string
+  patientId: string
+  patientName: string
+  diagnosis: string
+  formulaName: string
+  consultationId?: string
+  updatedAt: string
+  createdAt: string
+}
+
+export interface MedicalCaseDetails extends MedicalCaseSummary {
+  symptoms: string
+  formulaDetail: string
+  usageNote: string
+  note?: string
+}
+
+export interface Citation {
+  fileId: string
+  fileName: string
+  page: number
+  fileType?: 'pdf' | 'doc' | 'docx' | 'other'
+  viewUrl?: string
+}
+
+export interface KnowledgeFile {
+  id: string
+  fileName: string
+  fileType: 'pdf' | 'doc' | 'docx' | 'other'
+  fileSize: number
+  status: 'processing' | 'ready' | 'failed'
+  createdAt: string
+  updatedAt: string
+  viewUrl?: string
+}
+
+export interface KnowledgeSearchHit {
+  id: string
+  fileId: string
+  fileName: string
+  fileType: KnowledgeFile['fileType']
+  page: number
+  snippet: string
+  score?: number
+  viewUrl?: string
+}
+
+export type DraftFieldStatus = 'empty' | 'suggested' | 'confirmed' | 'edited'
+
+export interface ConsultationDraft {
+  consultationId: string
+  patientId?: string
+  symptoms: string
+  diagnosis: string
+  formulaName: string
+  formulaDetail: string
+  usageNote: string
+  note: string
+  status: Record<
+    'patientId' | 'symptoms' | 'diagnosis' | 'formulaName' | 'formulaDetail' | 'usageNote' | 'note',
+    DraftFieldStatus
+  >
+  updatedAt: string
 }

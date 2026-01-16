@@ -4,14 +4,22 @@ import clsx from 'clsx'
 interface SidebarNavProps {
   items: { label: string; to: string; icon?: string; badge?: string }[]
   title: string
+  userName?: string
 }
 
-export function SidebarNav({ items, title }: SidebarNavProps) {
+export function SidebarNav({ items, title, userName }: SidebarNavProps) {
   return (
-    <nav className="w-64 shrink-0 space-y-6 bg-white/90 p-6 shadow-soft-card">
-      <div>
-        <p className="text-xs uppercase tracking-wide text-slate-500">{title}</p>
-        <p className="mt-1 text-xl font-bold text-ink">Med Assist</p>
+    <nav className="flex h-screen w-56 shrink-0 flex-col gap-5 bg-white/90 p-5 shadow-soft-card">
+      <div className="flex items-center gap-3">
+        <img
+          src="/logo-full.png"
+          alt="大用问证"
+          className="h-8 w-auto select-none"
+          draggable={false}
+        />
+        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+          {title}
+        </span>
       </div>
       <div className="space-y-2">
         {items.map((item) => (
@@ -43,10 +51,12 @@ export function SidebarNav({ items, title }: SidebarNavProps) {
           </NavLink>
         ))}
       </div>
-      <div className="rounded-xl bg-gradient-to-r from-primary-500 to-emerald-500 p-4 text-white">
-        <p className="text-sm font-semibold">规则优先 · 模型兜底</p>
-        <p className="mt-1 text-xs text-white/80">保持病例完整，确认来源再采纳。</p>
-      </div>
+      {userName ? (
+        <div className="mt-auto flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-slate-700">
+          <span className="text-xs text-slate-500">当前用户</span>
+          <span className="text-sm font-semibold text-ink">{userName}</span>
+        </div>
+      ) : null}
     </nav>
   )
 }

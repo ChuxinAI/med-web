@@ -21,9 +21,13 @@
 ## 开发与构建
 ```bash
 npm install
-npm run dev    # 启动本地开发
+npm run dev    # 启动本地开发（默认端口 5174）
 npm run build  # TS 检查 + 生产构建
 ```
+
+## 登录入口
+- 医生端：`/doctor/login`（根目录 `/` 与 `/login` 默认跳转到这里）
+- 管理端：`/admin/login`
 
 ## 后续对接提示
 - 将 `mockApi.ts` 替换为真实 FastAPI 接口；在 hooks 中补充鉴权头、错误处理、频控提示。
