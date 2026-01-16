@@ -50,7 +50,7 @@ export function AdminConsultationsStatsPage() {
                 setPage(1)
               }}
               placeholder="检索：医生/患者/症状/诊断/ID"
-              className="h-9 w-72 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-72"
             />
             <select
               value={status}
@@ -58,7 +58,7 @@ export function AdminConsultationsStatsPage() {
                 setStatus(e.target.value as typeof status)
                 setPage(1)
               }}
-              className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-auto"
             >
               <option value="all">全部状态</option>
               <option value="open">open</option>
@@ -75,8 +75,8 @@ export function AdminConsultationsStatsPage() {
           </div>
         }
       >
-        <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white/70">
-          <table className="w-full table-fixed text-left text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white/70">
+          <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th className="w-[16%] px-4 py-3">问诊ID</th>

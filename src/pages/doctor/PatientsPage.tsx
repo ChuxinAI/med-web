@@ -52,7 +52,7 @@ export function PatientsPage() {
     <Card
       title="患者管理"
       action={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             value={q}
             onChange={(e) => {
@@ -60,7 +60,7 @@ export function PatientsPage() {
               setPage(1)
             }}
             placeholder="检索：姓名/电话/地区/邮箱/ID"
-            className="h-9 w-56 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-56"
           />
           <select
             value={region}
@@ -68,7 +68,7 @@ export function PatientsPage() {
               setRegion(e.target.value)
               setPage(1)
             }}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-auto"
           >
             <option value="all">全部地区</option>
             {regions.map((r) => (
@@ -90,7 +90,7 @@ export function PatientsPage() {
               setNotice(null)
               setCreateOpen(true)
             }}
-            className="h-9 rounded-xl bg-primary-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700"
+            className="h-9 w-full rounded-xl bg-primary-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700 sm:w-auto"
           >
             新建患者
           </button>
@@ -98,8 +98,8 @@ export function PatientsPage() {
       }
     >
       {notice ? <InlineNotice tone={notice.tone} message={notice.message} /> : null}
-      <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white/70">
-        <table className="w-full table-fixed text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white/70">
+        <table className="w-full min-w-[980px] table-fixed text-left text-sm">
           <thead className="bg-slate-50 text-xs text-slate-500">
             <tr>
               <th className="w-32 px-4 py-3">患者ID</th>

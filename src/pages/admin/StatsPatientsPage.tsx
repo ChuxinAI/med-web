@@ -46,13 +46,13 @@ export function AdminPatientsPage() {
               setPage(1)
             }}
             placeholder="检索：医生/患者/地区/电话/邮箱/ID"
-            className="h-9 w-80 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-80"
           />
         </div>
       }
     >
-      <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white/70">
-        <table className="w-full table-fixed text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white/70">
+        <table className="w-full min-w-[980px] table-fixed text-left text-sm">
           <thead className="bg-slate-50 text-xs text-slate-500">
             <tr>
               <th className="w-[16%] px-4 py-3">患者ID</th>

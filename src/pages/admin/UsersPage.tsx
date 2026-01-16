@@ -98,7 +98,7 @@ export function UsersPage() {
                 setPage(1)
               }}
               placeholder="检索：用户名/姓名/单位/电话/邮箱/地区"
-              className="h-9 w-72 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-72"
             />
             <select
               value={role}
@@ -106,7 +106,7 @@ export function UsersPage() {
                 setRole(e.target.value as typeof role)
                 setPage(1)
               }}
-              className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-auto"
             >
               <option value="all">全部类型</option>
               <option value="doctor">医生</option>
@@ -118,7 +118,7 @@ export function UsersPage() {
                 setStatusFilter(e.target.value as typeof status)
                 setPage(1)
               }}
-              className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-auto"
             >
               <option value="all">全部状态</option>
               <option value="active">启用</option>
@@ -131,7 +131,7 @@ export function UsersPage() {
                 setPageSize(Number(e.target.value))
                 setPage(1)
               }}
-              className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-auto"
             >
               <option value={10}>10/页</option>
               <option value={20}>20/页</option>
@@ -142,8 +142,8 @@ export function UsersPage() {
         }
       >
         {notice ? <InlineNotice tone={notice.tone} message={notice.message} /> : null}
-        <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white/70">
-          <table className="w-full table-fixed text-left text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white/70">
+          <table className="w-full min-w-[980px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th className="w-[13%] px-4 py-3">用户名</th>
@@ -192,7 +192,7 @@ export function UsersPage() {
           </table>
         </div>
 
-        <div className="mt-4 flex items-center justify-between text-sm text-slate-700">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
           <div className="text-xs text-slate-500">
             第 {safePage} / {pageCount} 页
           </div>
@@ -368,7 +368,7 @@ function UserEditModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="space-y-2">
               <span className="text-xs font-semibold text-slate-600">单位</span>
               <input
@@ -401,7 +401,7 @@ function UserEditModal({
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
               />
             </label>
-            <label className="col-span-2 space-y-2">
+            <label className="space-y-2 sm:col-span-2">
               <span className="text-xs font-semibold text-slate-600">邮箱</span>
               <input
                 value={draft.email}
@@ -409,7 +409,7 @@ function UserEditModal({
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
               />
             </label>
-            <label className="col-span-2 space-y-2">
+            <label className="space-y-2 sm:col-span-2">
               <span className="text-xs font-semibold text-slate-600">备注</span>
               <textarea
                 value={draft.note}
@@ -420,7 +420,7 @@ function UserEditModal({
             </label>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-600">
+          <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-600 sm:grid-cols-2">
             <div>
               <p className="text-slate-500">注册时间</p>
               <p className="mt-1 font-semibold text-slate-800">

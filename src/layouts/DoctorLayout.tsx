@@ -1,6 +1,5 @@
-import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
-import { SidebarNav } from '../components/SidebarNav'
+import { ShellLayout } from './ShellLayout'
 
 const navItems = [
   { label: '开始问诊', to: '/doctor/chat' },
@@ -11,18 +10,15 @@ const navItems = [
 ]
 
 export function DoctorLayout() {
-  useEffect(() => {
-    document.title = '大用问证医生端'
-  }, [])
-
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-mist via-white to-primary-50">
-      <SidebarNav title="医生端" items={navItems} userName="李医生" />
-      <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-8">
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <Outlet />
-        </div>
-      </main>
-    </div>
+    <ShellLayout
+      title="医生端"
+      items={navItems}
+      userName="李医生"
+      documentTitle="大用问证医生端"
+      backgroundClassName="bg-gradient-to-br from-mist via-white to-primary-50"
+    >
+      <Outlet />
+    </ShellLayout>
   )
 }

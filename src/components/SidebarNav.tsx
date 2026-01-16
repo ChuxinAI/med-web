@@ -5,11 +5,13 @@ interface SidebarNavProps {
   items: { label: string; to: string; icon?: string; badge?: string }[]
   title: string
   userName?: string
+  className?: string
+  onNavigate?: () => void
 }
 
-export function SidebarNav({ items, title, userName }: SidebarNavProps) {
+export function SidebarNav({ items, title, userName, className, onNavigate }: SidebarNavProps) {
   return (
-    <nav className="flex h-screen w-56 shrink-0 flex-col gap-5 bg-white/90 p-5 shadow-soft-card">
+    <nav className={clsx('flex h-full w-56 shrink-0 flex-col gap-5 bg-white/90 p-5 shadow-soft-card lg:h-screen', className)}>
       <div className="flex items-center gap-3">
         <img
           src="/logo-full.png"
@@ -26,6 +28,7 @@ export function SidebarNav({ items, title, userName }: SidebarNavProps) {
           <NavLink
             key={item.to}
             to={item.to}
+            onClick={() => onNavigate?.()}
             className={({ isActive }) =>
               clsx(
                 'flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition',

@@ -45,7 +45,7 @@ export function AdminSettingsPage() {
     <div className="space-y-4">
       <Card title="个人资料">
         <form id="admin-profile-form" onSubmit={onSaveProfile} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block space-y-2">
               <span className="text-sm font-medium text-slate-700">用户ID</span>
               <input
@@ -63,7 +63,7 @@ export function AdminSettingsPage() {
               />
             </label>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block space-y-2">
               <span className="text-sm font-medium text-slate-700">单位</span>
               <input
@@ -96,7 +96,7 @@ export function AdminSettingsPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                 />
               </label>
-              <label className="col-span-2 block space-y-2">
+              <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium text-slate-700">邮箱</span>
                 <input
                   value={editing.email}
@@ -104,7 +104,7 @@ export function AdminSettingsPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                 />
               </label>
-              <label className="col-span-2 block space-y-2">
+              <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium text-slate-700">备注</span>
                 <textarea
                   value={editing.note}
@@ -115,7 +115,7 @@ export function AdminSettingsPage() {
               </label>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-white/70 p-4 text-xs text-slate-600">
+            <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-100 bg-white/70 p-4 text-xs text-slate-600 sm:grid-cols-2">
               <div>
                 <p className="text-slate-500">注册时间</p>
                 <p className="mt-1 font-semibold text-slate-800">{formatDateTime(profile.registeredAt)}</p>

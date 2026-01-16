@@ -99,7 +99,7 @@ function CaseEditor({
           </button>
         }
       >
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="space-y-2">
             <span className="text-xs font-semibold text-slate-600">诊断结果</span>
             <input
@@ -116,7 +116,7 @@ function CaseEditor({
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
             />
           </label>
-          <label className="col-span-2 space-y-2">
+          <label className="space-y-2 sm:col-span-2">
             <span className="text-xs font-semibold text-slate-600">症状（纯文本）</span>
             <textarea
               value={symptoms}
@@ -125,7 +125,7 @@ function CaseEditor({
               className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
             />
           </label>
-          <label className="col-span-2 space-y-2">
+          <label className="space-y-2 sm:col-span-2">
             <span className="text-xs font-semibold text-slate-600">治疗方剂详情（纯文本）</span>
             <textarea
               value={formulaDetail}
@@ -134,7 +134,7 @@ function CaseEditor({
               className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
             />
           </label>
-          <label className="col-span-2 space-y-2">
+          <label className="space-y-2 sm:col-span-2">
             <span className="text-xs font-semibold text-slate-600">用法用量（纯文本）</span>
             <textarea
               value={usageNote}
@@ -143,7 +143,7 @@ function CaseEditor({
               className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
             />
           </label>
-          <label className="col-span-2 space-y-2">
+          <label className="space-y-2 sm:col-span-2">
             <span className="text-xs font-semibold text-slate-600">备注（纯文本）</span>
             <textarea
               value={note}

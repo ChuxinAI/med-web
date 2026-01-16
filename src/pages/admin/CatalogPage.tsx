@@ -64,7 +64,7 @@ export function CatalogPage() {
                 setPage(1)
               }}
               placeholder="按文件名过滤"
-              className="h-9 w-56 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-56"
             />
             <CreatedAtSortToggle
               order={fileOrder}
@@ -76,14 +76,14 @@ export function CatalogPage() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="h-9 rounded-xl bg-primary-600 px-3 text-sm font-semibold text-white shadow-soft-card hover:bg-primary-700"
+              className="h-9 w-full rounded-xl bg-primary-600 px-3 text-sm font-semibold text-white shadow-soft-card hover:bg-primary-700 sm:w-auto"
             >
               上传文件
             </button>
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
             >
               全库检索
             </button>
@@ -111,8 +111,8 @@ export function CatalogPage() {
         }
       >
         {notice ? <InlineNotice tone={notice.tone} message={notice.message} /> : null}
-        <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white/70">
-          <table className="w-full table-fixed text-left text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white/70">
+          <table className="w-full min-w-[860px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th className="w-[46%] px-4 py-3">文件名</th>

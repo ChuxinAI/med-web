@@ -90,7 +90,7 @@ export function PatientUpsertModal({
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto p-5">
-          <div className="grid grid-cols-2 gap-4 text-sm text-slate-700">
+          <div className="grid grid-cols-1 gap-4 text-sm text-slate-700 sm:grid-cols-2">
             <label className="col-span-2 space-y-2">
               <span className="text-xs font-semibold text-slate-600">姓名（必填）</span>
               <input

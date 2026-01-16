@@ -3,7 +3,7 @@ import { Badge } from './Badge'
 
 export function PatientSummary({ detail }: { detail: CaseDetails }) {
   return (
-    <div className="glass-panel rounded-2xl p-5">
+    <div className="glass-panel rounded-2xl p-4 sm:p-5">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-slate-500">患者摘要</p>
@@ -16,7 +16,7 @@ export function PatientSummary({ detail }: { detail: CaseDetails }) {
           {detail.status === 'closed' ? '已结案' : '进行中'}
         </Badge>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-700">
+      <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
         <div className="rounded-xl bg-slate-50 p-3">
           <p className="text-xs text-slate-500">生命体征</p>
           <p>BP {detail.demographics.vitals?.bp}</p>

@@ -11,7 +11,7 @@ interface CardProps {
 
 export function Card({ title, action, children, className, bodyClassName }: CardProps) {
   return (
-    <div className={clsx('glass-panel rounded-2xl p-5', className)}>
+    <div className={clsx('glass-panel rounded-2xl p-4 sm:p-5', className)}>
       {(title || action) && (
         <div className="mb-4 flex flex-wrap items-center gap-3">
           {title && <h3 className="text-lg font-semibold text-ink">{title}</h3>}

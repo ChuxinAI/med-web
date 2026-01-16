@@ -17,6 +17,16 @@ body {
   @apply bg-mist min-h-screen;
 }
 
+.min-h-screen-dvh {
+  min-height: 100vh;
+}
+
+@supports (min-height: 100dvh) {
+  .min-h-screen-dvh {
+    min-height: 100dvh;
+  }
+}
+
 .glass-panel {
   @apply bg-white/80 backdrop-blur border border-slate-100 shadow-soft-card;
 }

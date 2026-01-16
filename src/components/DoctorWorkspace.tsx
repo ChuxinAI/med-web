@@ -32,8 +32,8 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   const [input, setInput] = useState('')
 
   return (
-    <div className="grid grid-cols-3 gap-5">
-      <div className="col-span-2 space-y-4">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div className="space-y-4 lg:col-span-2">
         <Card
           title="问诊对话"
           action={<span className="text-xs text-slate-500">来源标注：规则 / RAG / 模型</span>}
@@ -45,7 +45,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
           </div>
 
           <div className="mt-4 rounded-2xl border border-slate-100 bg-white/70 p-3">
-            <div className="flex items-end gap-3">
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-end">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -73,7 +73,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
                   sendMessage.mutate({ consultationId: activeId, content })
                   setInput('')
                 }}
-                className="h-[52px] rounded-2xl bg-primary-600 px-5 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700 disabled:opacity-60"
+                className="h-[52px] w-full rounded-2xl bg-primary-600 px-5 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700 disabled:opacity-60 sm:w-auto"
               >
                 发送
               </button>

@@ -419,7 +419,7 @@ function WriteCaseConfirmModal({
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto p-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="col-span-2 space-y-2">
               <span className="text-xs font-semibold text-slate-600">关联患者（必填）</span>
               <select

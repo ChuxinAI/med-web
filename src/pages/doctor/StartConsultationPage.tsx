@@ -36,8 +36,8 @@ export function StartConsultationPage() {
     consultationId ? (
       <DoctorWorkspace consultationId={consultationId} />
     ) : (
-      <div className="grid grid-cols-3 gap-5">
-        <div className="col-span-2 space-y-4">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
           <Card
             title="问诊对话"
             action={<span className="text-xs text-slate-500">一次只处理一个会话</span>}

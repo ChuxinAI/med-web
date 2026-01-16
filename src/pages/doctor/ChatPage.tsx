@@ -91,8 +91,8 @@ export function ChatPage() {
   }
 
   return (
-    <div className="grid flex-1 min-h-0 grid-cols-5 gap-5">
-      <div className="col-span-4 flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white/70 shadow-soft-card">
+    <div className="grid flex-1 min-h-0 grid-cols-1 gap-5 lg:grid-cols-5">
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white/70 shadow-soft-card lg:col-span-4">
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="mx-auto w-full max-w-6xl">
             <div className="relative">
@@ -154,7 +154,7 @@ export function ChatPage() {
         </div>
       </div>
 
-      <div className="col-span-1 flex min-h-0 flex-col">
+      <div className="flex min-h-0 flex-col lg:col-span-1">
         <Card title="病例记录" className="flex-1 min-h-0 flex flex-col" bodyClassName="flex-1 min-h-0 overflow-y-auto">
           {!consultationId || !draft ? (
             <div className="text-sm text-slate-600">正在加载...</div>

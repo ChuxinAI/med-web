@@ -6,7 +6,7 @@ export function KnowledgePage() {
   const { data: catalog } = useCatalog()
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <Card title="结构化知识库">
         <div className="space-y-3 text-sm text-slate-700">
           {catalog?.map((item) => (
