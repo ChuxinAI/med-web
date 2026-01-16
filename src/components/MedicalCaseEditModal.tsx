@@ -13,10 +13,10 @@ export function MedicalCaseEditModal({
   caseId: string | null
   onClose: () => void
 }) {
+  const { data: detail } = useMedicalCaseDetails(caseId ?? undefined)
+
   if (!open || !caseId) return null
   if (typeof document === 'undefined') return null
-  const { data: detail } = useMedicalCaseDetails(caseId ?? undefined)
-  const updateCase = useUpdateMedicalCase()
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-6">
