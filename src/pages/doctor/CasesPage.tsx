@@ -6,6 +6,7 @@ import { Card } from '../../components/Card'
 import { ConsultationWorkspaceModal } from '../../components/ConsultationWorkspaceModal'
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
 import { TablePagination } from '../../components/TablePagination'
+import { HorizontalScroll } from '../../components/HorizontalScroll'
 import { formatDateTime } from '../../lib/datetime'
 
 export function CasesPage() {
@@ -87,62 +88,111 @@ export function CasesPage() {
         </div>
       }
     >
-      <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white/70">
-        <table className="w-full min-w-[900px] table-fixed text-left text-sm">
-          <thead className="bg-slate-50 text-xs text-slate-500">
-            <tr>
-              <th className="w-36 px-4 py-3">病例ID</th>
-              <th className="w-28 px-4 py-3">患者</th>
-              <th className="px-4 py-3">诊断结果</th>
-              <th className="w-48 px-4 py-3">治疗方剂名</th>
-              <th className="w-52 px-4 py-3">更新时间</th>
-              <th className="w-44 px-4 py-3 text-center">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {pageItems.map((item) => (
-              <tr key={item.id} className="hover:bg-white/50">
-                <td className="px-4 py-3">
+      <div className="rounded-2xl border border-slate-100 bg-white/70 lg:hidden">
+        <div className="divide-y divide-slate-100">
+          {pageItems.map((item) => (
+            <div key={item.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
                   <Link to={`/doctor/cases/${item.id}`} className="font-semibold text-ink hover:underline">
                     {item.id}
                   </Link>
-                </td>
-                <td className="px-4 py-3 font-semibold text-ink">{item.patientName}</td>
-                <td className="truncate px-4 py-3 text-slate-700">{item.diagnosis}</td>
-                <td className="px-4 py-3">
+                  <div className="mt-1 text-sm text-slate-700">
+                    患者：<span className="font-semibold text-ink">{item.patientName}</span>
+                  </div>
+                  <div className="mt-2 text-sm text-slate-700">
+                    <span className="text-xs font-semibold text-slate-500">诊断</span>
+                    <div className="mt-1">{item.diagnosis}</div>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
                   <Badge tone="success">{item.formulaName}</Badge>
-                </td>
-                <td className="px-4 py-3 text-slate-700">{formatDateTime(item.updatedAt)}</td>
-                <td className="px-4 py-3 text-center">
-                  <div className="flex items-center justify-center gap-2">
-                    <Link
-                      to={`/doctor/cases/${item.id}`}
-                      className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
-                    >
-                      编辑
+                  <div className="mt-2 text-xs text-slate-500">{formatDateTime(item.updatedAt)}</div>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  to={`/doctor/cases/${item.id}`}
+                  className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-emerald-700"
+                >
+                  编辑
+                </Link>
+                {item.consultationId ? (
+                  <button
+                    type="button"
+                    onClick={() => setOpenConsultationId(item.consultationId ?? null)}
+                    className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    查看问诊
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+          {pageItems.length === 0 ? (
+            <div className="px-4 py-10 text-center text-slate-500">无匹配记录</div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="hidden lg:block">
+        <HorizontalScroll className="touch-pan-x overscroll-x-contain rounded-2xl border border-slate-100 bg-white/70">
+          <table className="w-full min-w-[900px] table-fixed text-left text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500">
+              <tr>
+                <th className="w-36 px-4 py-3">病例ID</th>
+                <th className="w-28 px-4 py-3">患者</th>
+                <th className="px-4 py-3">诊断结果</th>
+                <th className="w-48 px-4 py-3">治疗方剂名</th>
+                <th className="w-52 px-4 py-3">更新时间</th>
+                <th className="w-44 px-4 py-3 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {pageItems.map((item) => (
+                <tr key={item.id} className="hover:bg-white/50">
+                  <td className="px-4 py-3">
+                    <Link to={`/doctor/cases/${item.id}`} className="font-semibold text-ink hover:underline">
+                      {item.id}
                     </Link>
-                    {item.consultationId ? (
-                      <button
-                        type="button"
-                        onClick={() => setOpenConsultationId(item.consultationId ?? null)}
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-ink">{item.patientName}</td>
+                  <td className="truncate px-4 py-3 text-slate-700">{item.diagnosis}</td>
+                  <td className="px-4 py-3">
+                    <Badge tone="success">{item.formulaName}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">{formatDateTime(item.updatedAt)}</td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <Link
+                        to={`/doctor/cases/${item.id}`}
                         className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
                       >
-                        查看问诊
-                      </button>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {pageItems.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
-                  无匹配记录
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+                        编辑
+                      </Link>
+                      {item.consultationId ? (
+                        <button
+                          type="button"
+                          onClick={() => setOpenConsultationId(item.consultationId ?? null)}
+                          className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
+                        >
+                          查看问诊
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {pageItems.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                    无匹配记录
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </HorizontalScroll>
       </div>
 
       <TablePagination

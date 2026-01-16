@@ -5,6 +5,7 @@ import { ConsultationWorkspaceModal } from '../../components/ConsultationWorkspa
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
 import { TablePagination } from '../../components/TablePagination'
 import { formatDateTime } from '../../lib/datetime'
+import { HorizontalScroll } from '../../components/HorizontalScroll'
 
 export function AdminConsultationsStatsPage() {
   const { data: consultations } = useDoctorCases()
@@ -75,52 +76,92 @@ export function AdminConsultationsStatsPage() {
           </div>
         }
       >
-        <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white/70">
-          <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
-              <tr>
-                <th className="w-[16%] px-4 py-3">问诊ID</th>
-                <th className="w-[12%] px-4 py-3">医生</th>
-                <th className="w-[12%] px-4 py-3">患者</th>
-                <th className="w-[25%] px-4 py-3">症状</th>
-                <th className="w-[25%] px-4 py-3">诊断结果</th>
-                <th className="w-[14%] px-4 py-3">更新时间</th>
-                <th className="w-[12%] px-4 py-3 text-center">对话</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {pageItems.map((c) => (
-                <tr key={c.id} className="hover:bg-white/50">
-                  <td className="px-4 py-3 font-semibold text-ink">{c.id}</td>
-                  <td className="px-4 py-3 text-slate-700">{c.doctorName}</td>
-                  <td className="px-4 py-3 text-slate-700">{c.patientName}</td>
-                  <td className="truncate px-4 py-3 text-slate-700" title={c.symptomsText ?? ''}>
-                    {c.symptomsText ?? '-'}
-                  </td>
-                  <td className="truncate px-4 py-3 text-slate-700" title={c.diagnosisText ?? ''}>
-                    {c.diagnosisText ?? '-'}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-700">{formatDateTime(c.updatedAt)}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => setOpenConsultationId(c.id)}
-                      className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
-                    >
-                      查看
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {pageItems.length === 0 ? (
+        <div className="rounded-2xl border border-slate-100 bg-white/70 lg:hidden">
+          <div className="divide-y divide-slate-100">
+            {pageItems.map((c) => (
+              <div key={c.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-ink">{c.patientName}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {c.id} · 医生：{c.doctorName}
+                    </div>
+                    <div className="mt-2 text-sm text-slate-700">
+                      <span className="text-xs font-semibold text-slate-500">症状</span>
+                      <div className="mt-1">{c.symptomsText ?? '-'}</div>
+                    </div>
+                    <div className="mt-2 text-sm text-slate-700">
+                      <span className="text-xs font-semibold text-slate-500">诊断</span>
+                      <div className="mt-1">{c.diagnosisText ?? '-'}</div>
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">更新：{formatDateTime(c.updatedAt)}</div>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setOpenConsultationId(c.id)}
+                    className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-emerald-700"
+                  >
+                    查看对话
+                  </button>
+                </div>
+              </div>
+            ))}
+            {pageItems.length === 0 ? (
+              <div className="px-4 py-10 text-center text-slate-500">无匹配记录</div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="hidden lg:block">
+          <HorizontalScroll className="touch-pan-x overscroll-x-contain rounded-2xl border border-slate-100 bg-white/70">
+            <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
-                    无匹配记录
-                  </td>
+                  <th className="w-[16%] px-4 py-3">问诊ID</th>
+                  <th className="w-[12%] px-4 py-3">医生</th>
+                  <th className="w-[12%] px-4 py-3">患者</th>
+                  <th className="w-[25%] px-4 py-3">症状</th>
+                  <th className="w-[25%] px-4 py-3">诊断结果</th>
+                  <th className="w-[14%] px-4 py-3">更新时间</th>
+                  <th className="w-[12%] px-4 py-3 text-center">对话</th>
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {pageItems.map((c) => (
+                  <tr key={c.id} className="hover:bg-white/50">
+                    <td className="px-4 py-3 font-semibold text-ink">{c.id}</td>
+                    <td className="px-4 py-3 text-slate-700">{c.doctorName}</td>
+                    <td className="px-4 py-3 text-slate-700">{c.patientName}</td>
+                    <td className="truncate px-4 py-3 text-slate-700" title={c.symptomsText ?? ''}>
+                      {c.symptomsText ?? '-'}
+                    </td>
+                    <td className="truncate px-4 py-3 text-slate-700" title={c.diagnosisText ?? ''}>
+                      {c.diagnosisText ?? '-'}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-700">{formatDateTime(c.updatedAt)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setOpenConsultationId(c.id)}
+                        className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
+                      >
+                        查看
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {pageItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                      无匹配记录
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </HorizontalScroll>
         </div>
 
         <TablePagination

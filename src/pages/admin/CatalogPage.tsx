@@ -10,6 +10,7 @@ import { InlineNotice } from '../../components/InlineNotice'
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
 import { SourcePreviewModal } from '../../components/SourcePreviewModal'
 import { TablePagination } from '../../components/TablePagination'
+import { HorizontalScroll } from '../../components/HorizontalScroll'
 import { formatDateTime } from '../../lib/datetime'
 import type { Citation, KnowledgeFile, KnowledgeSearchHit } from '../../types'
 
@@ -111,63 +112,107 @@ export function CatalogPage() {
         }
       >
         {notice ? <InlineNotice tone={notice.tone} message={notice.message} /> : null}
-        <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white/70">
-          <table className="w-full min-w-[860px] table-fixed text-left text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
-              <tr>
-                <th className="w-[46%] px-4 py-3">文件名</th>
-                <th className="w-[12%] px-4 py-3">类型</th>
-                <th className="w-[14%] px-4 py-3 text-right">大小</th>
-                <th className="w-[16%] px-4 py-3">状态</th>
-                <th className="w-[12%] px-4 py-3 text-center">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {pageItems.map((f) => (
-                <tr key={f.id} className="hover:bg-white/50">
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setPreview(fileToCitation(f, 1))}
-                      className="truncate font-semibold text-ink hover:underline"
-                      title={f.fileName}
-                    >
-                      {f.fileName}
-                    </button>
-                    <div className="mt-1 text-xs text-slate-500">更新：{formatDateTime(f.updatedAt)}</div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">{f.fileType}</td>
-                  <td className="px-4 py-3 text-right text-slate-700">{formatBytes(f.fileSize)}</td>
-                  <td className="px-4 py-3 text-slate-700">{statusLabel(f.status)}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const ok = window.confirm('确认删除该文件？删除后可重新上传。')
-                        if (!ok) return
-                        try {
-                          await deleteFile.mutateAsync({ fileId: f.id })
-                          setNotice({ tone: 'success', message: '已删除文件。' })
-                        } catch (e) {
-                          setNotice({ tone: 'error', message: e instanceof Error ? e.message : '删除失败' })
-                        }
-                      }}
-                      className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {pageItems.length === 0 ? (
+        <div className="rounded-2xl border border-slate-100 bg-white/70 lg:hidden">
+          <div className="divide-y divide-slate-100">
+            {pageItems.map((f) => (
+              <div key={f.id} className="p-4">
+                <button
+                  type="button"
+                  onClick={() => setPreview(fileToCitation(f, 1))}
+                  className="w-full text-left font-semibold text-ink hover:underline"
+                  title={f.fileName}
+                >
+                  {f.fileName}
+                </button>
+                <div className="mt-2 text-xs text-slate-500">
+                  {f.fileType} · {formatBytes(f.fileSize)} · {statusLabel(f.status)}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">更新：{formatDateTime(f.updatedAt)}</div>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = window.confirm('确认删除该文件？删除后可重新上传。')
+                      if (!ok) return
+                      try {
+                        await deleteFile.mutateAsync({ fileId: f.id })
+                        setNotice({ tone: 'success', message: '已删除文件。' })
+                      } catch (e) {
+                        setNotice({ tone: 'error', message: e instanceof Error ? e.message : '删除失败' })
+                      }
+                    }}
+                    className="inline-flex h-9 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            ))}
+            {pageItems.length === 0 ? (
+              <div className="px-4 py-10 text-center text-slate-500">暂无文件</div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="hidden lg:block">
+          <HorizontalScroll className="touch-pan-x overscroll-x-contain rounded-2xl border border-slate-100 bg-white/70">
+            <table className="w-full min-w-[860px] table-fixed text-left text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
-                    暂无文件
-                  </td>
+                  <th className="w-[46%] px-4 py-3">文件名</th>
+                  <th className="w-[12%] px-4 py-3">类型</th>
+                  <th className="w-[14%] px-4 py-3 text-right">大小</th>
+                  <th className="w-[16%] px-4 py-3">状态</th>
+                  <th className="w-[12%] px-4 py-3 text-center">操作</th>
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {pageItems.map((f) => (
+                  <tr key={f.id} className="hover:bg-white/50">
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setPreview(fileToCitation(f, 1))}
+                        className="truncate font-semibold text-ink hover:underline"
+                        title={f.fileName}
+                      >
+                        {f.fileName}
+                      </button>
+                      <div className="mt-1 text-xs text-slate-500">更新：{formatDateTime(f.updatedAt)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{f.fileType}</td>
+                    <td className="px-4 py-3 text-right text-slate-700">{formatBytes(f.fileSize)}</td>
+                    <td className="px-4 py-3 text-slate-700">{statusLabel(f.status)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = window.confirm('确认删除该文件？删除后可重新上传。')
+                          if (!ok) return
+                          try {
+                            await deleteFile.mutateAsync({ fileId: f.id })
+                            setNotice({ tone: 'success', message: '已删除文件。' })
+                          } catch (e) {
+                            setNotice({ tone: 'error', message: e instanceof Error ? e.message : '删除失败' })
+                          }
+                        }}
+                        className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        删除
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {pageItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
+                      暂无文件
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </HorizontalScroll>
         </div>
 
         <TablePagination

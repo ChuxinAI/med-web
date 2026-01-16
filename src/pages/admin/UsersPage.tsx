@@ -11,6 +11,7 @@ import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
 import { formatDateTime } from '../../lib/datetime'
 import type { UserSummary } from '../../types'
 import { InlineNotice } from '../../components/InlineNotice'
+import { HorizontalScroll } from '../../components/HorizontalScroll'
 
 export function UsersPage() {
   const { data: users } = useAdminUsers()
@@ -142,54 +143,93 @@ export function UsersPage() {
         }
       >
         {notice ? <InlineNotice tone={notice.tone} message={notice.message} /> : null}
-        <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white/70">
-          <table className="w-full min-w-[980px] table-fixed text-left text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
-              <tr>
-                <th className="w-[13%] px-4 py-3">用户名</th>
-                <th className="w-[13%] px-4 py-3">真实姓名</th>
-                <th className="w-[9%] px-4 py-3">类型</th>
-                <th className="w-[9%] px-4 py-3">地区</th>
-                <th className="w-[12%] px-4 py-3">电话</th>
-                <th className="w-[20%] px-4 py-3">邮箱</th>
-                <th className="w-[12%] px-4 py-3 text-center">状态</th>
-                <th className="w-[12%] px-4 py-3 text-center">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {pageItems.map((u) => (
-                <tr key={u.id} className="hover:bg-white/50">
-                  <td className="truncate px-4 py-3 font-semibold text-ink">{u.username ?? u.name}</td>
-                  <td className="truncate px-4 py-3 text-slate-700">{u.realName ?? '-'}</td>
-                  <td className="px-4 py-3 text-slate-700">{u.role === 'doctor' ? '医生' : '管理员'}</td>
-                  <td className="truncate px-4 py-3 text-slate-700">{u.region ?? '-'}</td>
-                  <td className="truncate px-4 py-3 text-slate-700">{u.phone ?? '-'}</td>
-                  <td className="truncate px-4 py-3 text-slate-700">{u.email ?? '-'}</td>
-                  <td className="px-4 py-3 text-center">
+        <div className="rounded-2xl border border-slate-100 bg-white/70 lg:hidden">
+          <div className="divide-y divide-slate-100">
+            {pageItems.map((u) => (
+              <div key={u.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-ink">{u.username ?? u.name}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {(u.realName ?? '-')}{u.region ? ` · ${u.region}` : ''} · {u.role === 'doctor' ? '医生' : '管理员'}
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      {[u.phone, u.email].filter(Boolean).join(' · ') || '—'}
+                    </div>
+                  </div>
+                  <div className="shrink-0">
                     <Badge tone={u.status === 'active' ? 'success' : 'warning'}>
                       {u.status === 'active' ? '启用' : '封禁'}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(u)}
-                      className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
-                    >
-                      编辑
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {pageItems.length === 0 ? (
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(u)}
+                    className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-emerald-700"
+                  >
+                    编辑
+                  </button>
+                </div>
+              </div>
+            ))}
+            {pageItems.length === 0 ? (
+              <div className="px-4 py-10 text-center text-slate-500">无匹配记录</div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="hidden lg:block">
+          <HorizontalScroll className="touch-pan-x overscroll-x-contain rounded-2xl border border-slate-100 bg-white/70">
+            <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
-                    无匹配记录
-                  </td>
+                  <th className="w-[13%] px-4 py-3">用户名</th>
+                  <th className="w-[13%] px-4 py-3">真实姓名</th>
+                  <th className="w-[9%] px-4 py-3">类型</th>
+                  <th className="w-[9%] px-4 py-3">地区</th>
+                  <th className="w-[12%] px-4 py-3">电话</th>
+                  <th className="w-[20%] px-4 py-3">邮箱</th>
+                  <th className="w-[12%] px-4 py-3 text-center">状态</th>
+                  <th className="w-[12%] px-4 py-3 text-center">操作</th>
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {pageItems.map((u) => (
+                  <tr key={u.id} className="hover:bg-white/50">
+                    <td className="truncate px-4 py-3 font-semibold text-ink">{u.username ?? u.name}</td>
+                    <td className="truncate px-4 py-3 text-slate-700">{u.realName ?? '-'}</td>
+                    <td className="px-4 py-3 text-slate-700">{u.role === 'doctor' ? '医生' : '管理员'}</td>
+                    <td className="truncate px-4 py-3 text-slate-700">{u.region ?? '-'}</td>
+                    <td className="truncate px-4 py-3 text-slate-700">{u.phone ?? '-'}</td>
+                    <td className="truncate px-4 py-3 text-slate-700">{u.email ?? '-'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <Badge tone={u.status === 'active' ? 'success' : 'warning'}>
+                        {u.status === 'active' ? '启用' : '封禁'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(u)}
+                        className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
+                      >
+                        编辑
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {pageItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                      无匹配记录
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </HorizontalScroll>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">

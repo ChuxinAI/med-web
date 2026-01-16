@@ -31,6 +31,11 @@ body {
   @apply bg-white/80 backdrop-blur border border-slate-100 shadow-soft-card;
 }
 
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .pill {
   @apply rounded-full px-3 py-1 text-sm font-medium;
 }
