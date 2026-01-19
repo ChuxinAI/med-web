@@ -45,7 +45,7 @@ export function ShellLayout({
   }, [navOpen])
 
   return (
-    <div className={clsx('flex min-h-screen-dvh overflow-hidden', backgroundClassName)}>
+    <div className={clsx('flex h-screen-dvh overflow-hidden', backgroundClassName)}>
       <div className="hidden lg:block">
         <SidebarNav title={title} items={items} userName={userName} />
       </div>

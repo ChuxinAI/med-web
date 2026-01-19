@@ -36,15 +36,19 @@ export function StartConsultationPage() {
     consultationId ? (
       <DoctorWorkspace consultationId={consultationId} />
     ) : (
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+      <div className="grid flex-1 min-h-0 grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="flex min-h-0 flex-col lg:col-span-2">
           <Card
             title="问诊对话"
             action={<span className="text-xs text-slate-500">一次只处理一个会话</span>}
+            className="flex min-h-[60vh] max-h-[72vh] flex-col"
+            bodyClassName="flex-1 min-h-0 flex flex-col"
           >
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-600">
-              <p className="font-semibold text-ink">准备开始问诊</p>
-              <p className="mt-1">请在右侧选择患者（可选），然后点击“开始问诊”。</p>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-600">
+                <p className="font-semibold text-ink">准备开始问诊</p>
+                <p className="mt-1">请在右侧选择患者（可选），然后点击“开始问诊”。</p>
+              </div>
             </div>
             <div className="mt-4 rounded-2xl border border-slate-100 bg-white/70 p-3">
               <div className="flex items-end gap-3">

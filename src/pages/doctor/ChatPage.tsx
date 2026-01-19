@@ -116,8 +116,8 @@ export function ChatPage() {
   }
 
   return (
-    <div className="grid flex-1 min-h-0 grid-cols-1 gap-5 lg:grid-cols-5">
-      <div className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white/70 shadow-soft-card lg:col-span-4">
+    <div className="grid h-full flex-1 min-h-0 grid-cols-1 gap-5 overflow-hidden lg:grid-cols-5">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white/70 shadow-soft-card lg:col-span-4">
         <div className="flex items-center justify-between px-6 pt-5 lg:hidden">
           <span className="text-sm font-semibold text-ink">问诊对话</span>
           <button
@@ -128,7 +128,7 @@ export function ChatPage() {
             问诊记录
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4 lg:py-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 lg:py-6">
           <div className="mx-auto w-full max-w-6xl">
             <div className="relative">
               <div className="flex w-full max-w-3xl flex-col gap-4 lg:mx-auto">

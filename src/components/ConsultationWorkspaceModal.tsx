@@ -89,10 +89,10 @@ export function ConsultationWorkspaceModal({
 
         <div className="grid flex-1 min-h-0 grid-cols-5 gap-5 bg-slate-50 p-5">
           <div className="col-span-4 flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white/80 shadow-soft-card">
-            <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
               <div className="mx-auto w-full max-w-6xl">
                 <div className="relative">
-	                  <div className="flex w-full max-w-3xl flex-col gap-4 lg:mx-auto">
+                  <div className="flex w-full max-w-3xl flex-col gap-4 lg:mx-auto">
 	                    <CaseChatBubble key="guide" message={consultationGuideMessage} onOpenCitation={(c) => setSelectedCitation(c)} />
 	                    {(messages ?? []).map((m) => (
 	                      <CaseChatBubble key={m.id} message={m} onOpenCitation={(c) => setSelectedCitation(c)} />

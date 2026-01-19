@@ -75,11 +75,15 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
               </button>
             </div>
           }
+          className="flex min-h-[60vh] max-h-[72vh] flex-col"
+          bodyClassName="flex-1 min-h-0 flex flex-col"
         >
-          <div className="flex flex-col gap-3">
-            {groupedMessages.map((m) => (
-              <ChatMessage key={m.id} message={m} />
-            ))}
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            <div className="flex flex-col gap-3">
+              {groupedMessages.map((m) => (
+                <ChatMessage key={m.id} message={m} />
+              ))}
+            </div>
           </div>
 
           <div className="mt-4 rounded-2xl border border-slate-100 bg-white/70 p-3">
