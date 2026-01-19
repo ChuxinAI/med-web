@@ -1,5 +1,6 @@
 import type {
   AuditLogEntry,
+  AdminStats,
   CaseDetails,
   CaseMessage,
   CaseSummary,
@@ -13,6 +14,7 @@ import type {
   Patient,
   UserRole,
   UserSummary,
+  Disease,
 } from '../types'
 import {
   mockAuditLogs,
@@ -27,6 +29,7 @@ import {
   mockPatients,
   mockSuggestions,
   mockUsers,
+  mockDiseases,
 } from './mockData'
 
 const wait = (ms = 220) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -82,6 +85,70 @@ export async function fetchDoctorCases(): Promise<CaseSummary[]> {
   return mockCases
 }
 
+function extractCity(region?: string) {
+  if (!region) return '未标注'
+  const parts = region.split('/').map((part) => part.trim()).filter(Boolean)
+  if (parts.length >= 2) return parts[1]
+  return parts[0]
+}
+
+export async function fetchAdminStats(): Promise<AdminStats> {
+  await wait()
+
+  const doctorCountMap = new Map<string, number>()
+  const syndromeCountMap = new Map<string, number>()
+  const formulaCountMap = new Map<string, number>()
+
+  mockCases.forEach((item) => {
+    doctorCountMap.set(item.doctorName, (doctorCountMap.get(item.doctorName) ?? 0) + 1)
+
+    const detail = mockCaseDetails[item.id]
+    const syndrome = detail?.syndrome?.trim() || '未标注'
+    syndromeCountMap.set(syndrome, (syndromeCountMap.get(syndrome) ?? 0) + 1)
+
+    const formulas = detail?.formulas?.filter(Boolean) ?? []
+    if (formulas.length === 0) {
+      formulaCountMap.set('未标注', (formulaCountMap.get('未标注') ?? 0) + 1)
+    } else {
+      formulas.forEach((formula) => {
+        const key = formula.trim() || '未标注'
+        formulaCountMap.set(key, (formulaCountMap.get(key) ?? 0) + 1)
+      })
+    }
+  })
+
+  const doctorConsultations = Array.from(doctorCountMap.entries())
+    .map(([doctorName, count]) => ({ doctorName, count }))
+    .sort((a, b) => b.count - a.count)
+
+  const syndromeConsultations = Array.from(syndromeCountMap.entries())
+    .map(([syndrome, count]) => ({ syndrome, count }))
+    .sort((a, b) => b.count - a.count)
+
+  const formulaConsultations = Array.from(formulaCountMap.entries())
+    .map(([formula, count]) => ({ formula, count }))
+    .sort((a, b) => b.count - a.count)
+
+  const doctorCityCounts = mockUsers
+    .filter((user) => user.role === 'doctor')
+    .reduce((acc, user) => {
+      const city = extractCity(user.region)
+      acc.set(city, (acc.get(city) ?? 0) + 1)
+      return acc
+    }, new Map<string, number>())
+
+  const doctorCityCountsList = Array.from(doctorCityCounts.entries())
+    .map(([city, count]) => ({ city, count }))
+    .sort((a, b) => b.count - a.count)
+
+  return {
+    doctorConsultations,
+    syndromeConsultations,
+    formulaConsultations,
+    doctorCityCounts: doctorCityCountsList,
+  }
+}
+
 export async function createConsultation(args?: {
   patientId?: string
 }): Promise<{ consultationId: string }> {
@@ -100,6 +167,7 @@ export async function createConsultation(args?: {
     chiefComplaint: '（待补充主诉）',
     symptomsText: '',
     diagnosisText: '',
+    formulaName: '',
     createdAt: now,
     updatedAt: now,
     doctorName: '李医生',
@@ -223,6 +291,52 @@ export async function resetAdminUserPassword(userId: string): Promise<{ tempPass
 export async function fetchCatalog(): Promise<CatalogEntry[]> {
   await wait()
   return mockCatalog
+}
+
+export async function fetchDiseases(): Promise<Disease[]> {
+  await wait()
+  return mockDiseases
+}
+
+export async function createDisease(
+  input: Pick<Disease, 'name' | 'symptoms' | 'formula' | 'note'>,
+): Promise<Disease> {
+  await wait()
+  if (!input.name.trim()) throw new Error('病症名不能为空')
+  const now = new Date().toISOString()
+  const id = 'DIS-' + Date.now().toString().slice(-6)
+  const created: Disease = {
+    id,
+    name: input.name.trim(),
+    symptoms: input.symptoms.trim(),
+    formula: input.formula.trim(),
+    note: input.note?.trim() || undefined,
+    createdAt: now,
+    updatedAt: now,
+  }
+  mockDiseases.unshift(created)
+  return created
+}
+
+export async function updateDisease(
+  diseaseId: string,
+  patch: Partial<Pick<Disease, 'name' | 'symptoms' | 'formula' | 'note'>>,
+): Promise<Disease> {
+  await wait()
+  const index = mockDiseases.findIndex((d) => d.id === diseaseId)
+  if (index < 0) throw new Error('未找到病症')
+  const next: Disease = {
+    ...mockDiseases[index],
+    ...patch,
+    name: patch.name ? patch.name.trim() : mockDiseases[index].name,
+    symptoms: patch.symptoms ? patch.symptoms.trim() : mockDiseases[index].symptoms,
+    formula: patch.formula ? patch.formula.trim() : mockDiseases[index].formula,
+    note: patch.note?.trim() || undefined,
+    updatedAt: new Date().toISOString(),
+  }
+  if (!next.name.trim()) throw new Error('病症名不能为空')
+  mockDiseases[index] = next
+  return next
 }
 
 export async function fetchAuditLogs(): Promise<AuditLogEntry[]> {
@@ -355,7 +469,7 @@ export async function sendConsultationMessage(
               return k
             })
             .join('、')}。`
-        : '已记录。本次信息已较完整，可进行保存或写入病例。',
+        : '已记录。本次信息已较完整，可进行保存。',
     createdAt: new Date().toISOString(),
   }
 

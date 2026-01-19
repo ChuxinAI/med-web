@@ -9,37 +9,38 @@ import { TablePagination } from '../../components/TablePagination'
 import { HorizontalScroll } from '../../components/HorizontalScroll'
 import { formatDateTime } from '../../lib/datetime'
 import { getPatientAge } from '../../lib/patient'
+import { getCityFromRegion } from '../../lib/region'
 
 export function PatientsPage() {
   const { data: patients } = useDoctorPatients()
   const createPatient = useCreateDoctorPatient()
   const [q, setQ] = useState('')
-  const [region, setRegion] = useState('all')
+  const [city, setCity] = useState('all')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
   const [createOpen, setCreateOpen] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
-  const regions = useMemo(() => {
-    const set = new Set((patients ?? []).map((p) => p.region).filter(Boolean) as string[])
+  const cities = useMemo(() => {
+    const set = new Set((patients ?? []).map((p) => getCityFromRegion(p.region)).filter(Boolean) as string[])
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'))
   }, [patients])
 
   const filtered = useMemo(() => {
     const keyword = q.trim()
     return (patients ?? [])
-      .filter((p) => (region === 'all' ? true : p.region === region))
+      .filter((p) => (city === 'all' ? true : getCityFromRegion(p.region) === city))
       .filter((p) => {
         if (!keyword) return true
-        const haystack = [p.id, p.name, p.region, p.phone, p.email].filter(Boolean).join(' ')
+        const haystack = [p.id, p.name, getCityFromRegion(p.region), p.phone, p.email].filter(Boolean).join(' ')
         return haystack.includes(keyword)
       })
       .sort((a, b) => {
         const dir = order === 'asc' ? 1 : -1
         return (a.createdAt > b.createdAt ? 1 : -1) * dir
       })
-  }, [order, patients, q, region])
+  }, [city, order, patients, q])
 
   const total = filtered.length
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
@@ -60,21 +61,21 @@ export function PatientsPage() {
               setQ(e.target.value)
               setPage(1)
             }}
-            placeholder="检索：姓名/电话/地区/邮箱/ID"
+            placeholder="检索：姓名/电话/城市/邮箱/ID"
             className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-56"
           />
           <select
-            value={region}
+            value={city}
             onChange={(e) => {
-              setRegion(e.target.value)
+              setCity(e.target.value)
               setPage(1)
             }}
             className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-auto"
           >
-            <option value="all">全部地区</option>
-            {regions.map((r) => (
-              <option key={r} value={r}>
-                {r}
+            <option value="all">全部城市</option>
+            {cities.map((item) => (
+              <option key={item} value={item}>
+                {item}
               </option>
             ))}
           </select>
@@ -111,7 +112,7 @@ export function PatientsPage() {
                   <div className="mt-1 text-xs text-slate-500">{p.id}</div>
                   <div className="mt-2 text-sm text-slate-700">
                     {(p.gender ?? '-')}{getPatientAge(p) != null ? ` · ${getPatientAge(p)} 岁` : ''}
-                    {p.region ? ` · ${p.region}` : ''}
+                    {getCityFromRegion(p.region) ? ` · ${getCityFromRegion(p.region)}` : ''}
                   </div>
                   <div className="mt-2 text-xs text-slate-500">更新：{formatDateTime(p.updatedAt)}</div>
                   {p.phone || p.email ? (
@@ -129,10 +130,10 @@ export function PatientsPage() {
                   编辑
                 </Link>
                 <Link
-                  to={`/doctor/cases?patientId=${encodeURIComponent(p.id)}`}
+                  to={`/doctor/consultations?patientId=${encodeURIComponent(p.id)}`}
                   className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  查看病例
+                  问诊记录
                 </Link>
               </div>
             </div>
@@ -148,11 +149,11 @@ export function PatientsPage() {
           <table className="w-full min-w-[980px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
-                <th className="w-32 px-4 py-3">患者ID</th>
+                <th className="w-24 px-4 py-3">患者ID</th>
                 <th className="w-28 px-4 py-3">姓名</th>
                 <th className="w-20 px-4 py-3">性别</th>
                 <th className="w-20 px-4 py-3">年龄</th>
-                <th className="w-28 px-4 py-3">地区</th>
+                <th className="w-28 px-4 py-3">城市</th>
                 <th className="w-36 px-4 py-3">电话</th>
                 <th className="px-4 py-3">邮箱</th>
                 <th className="w-52 px-4 py-3">更新时间</th>
@@ -162,15 +163,15 @@ export function PatientsPage() {
             <tbody className="divide-y divide-slate-100">
               {pageItems.map((p) => (
                 <tr key={p.id} className="hover:bg-white/50">
-                  <td className="px-4 py-3">
-                    <Link to={`/doctor/patients/${p.id}`} className="font-semibold text-ink hover:underline">
+                  <td className="truncate px-4 py-3" title={p.id}>
+                    <Link to={`/doctor/patients/${p.id}`} className="block truncate font-semibold text-ink hover:underline">
                       {p.id}
                     </Link>
                   </td>
                   <td className="px-4 py-3 font-semibold text-ink">{p.name}</td>
                   <td className="px-4 py-3 text-slate-700">{p.gender ?? '-'}</td>
                   <td className="px-4 py-3 text-slate-700">{getPatientAge(p) ?? ''}</td>
-                  <td className="px-4 py-3 text-slate-700">{p.region ?? '-'}</td>
+                  <td className="px-4 py-3 text-slate-700">{getCityFromRegion(p.region)}</td>
                   <td className="px-4 py-3 text-slate-700">{p.phone ?? '-'}</td>
                   <td className="truncate px-4 py-3 text-slate-700">{p.email ?? '-'}</td>
                   <td className="px-4 py-3 text-slate-700">{formatDateTime(p.updatedAt)}</td>
@@ -183,10 +184,10 @@ export function PatientsPage() {
                         编辑
                       </Link>
                       <Link
-                        to={`/doctor/cases?patientId=${encodeURIComponent(p.id)}`}
+                        to={`/doctor/consultations?patientId=${encodeURIComponent(p.id)}`}
                         className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
                       >
-                        查看病例
+                        问诊记录
                       </Link>
                     </div>
                   </td>

@@ -50,7 +50,7 @@ export function ShellLayout({
         <SidebarNav title={title} items={items} userName={userName} />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-slate-100 bg-white/85 px-4 py-3 backdrop-blur lg:hidden">
           <div className="flex items-center gap-3">
             <button
@@ -78,8 +78,8 @@ export function ShellLayout({
           </span>
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-6 lg:p-8">
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4 sm:p-6 lg:p-8">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>
         </main>
       </div>
 

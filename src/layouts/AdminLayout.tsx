@@ -3,10 +3,10 @@ import { ShellLayout } from './ShellLayout'
 
 const navItems = [
   { label: '用户管理', to: '/admin/users' },
-  { label: '知识管理', to: '/admin/catalog' },
-  { label: '问诊管理', to: '/admin/stats/consultations' },
-  { label: '病例管理', to: '/admin/stats/cases' },
+  { label: '问诊记录', to: '/admin/stats/consultations' },
+  { label: '病症管理', to: '/admin/catalog' },
   { label: '患者管理', to: '/admin/stats/patients' },
+  { label: '数据统计', to: '/admin/stats/overview' },
   { label: '个人资料', to: '/admin/settings' },
 ]
 

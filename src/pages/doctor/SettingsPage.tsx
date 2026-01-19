@@ -3,6 +3,7 @@ import { Card } from '../../components/Card'
 import { formatDateTime } from '../../lib/datetime'
 import { PasswordResetModal } from '../../components/PasswordResetModal'
 import { InlineNotice } from '../../components/InlineNotice'
+import { RegionSelect } from '../../components/RegionSelect'
 
 export function SettingsPage() {
   const [profile, setProfile] = useState({
@@ -10,7 +11,7 @@ export function SettingsPage() {
     username: '李医生',
     org: '示例医院',
     realName: '李医生',
-    region: '上海',
+    region: '上海市/上海市/黄浦区',
     phone: '13800000000',
     email: 'doctor@example.com',
     note: '擅长内科常见病辨证论治。',
@@ -86,11 +87,7 @@ export function SettingsPage() {
             </label>
             <label className="block space-y-2">
               <span className="text-sm font-medium text-slate-700">地区</span>
-              <input
-                value={editing.region}
-                onChange={(e) => setEditing((prev) => ({ ...prev, region: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-              />
+              <RegionSelect value={editing.region} onChange={(region) => setEditing((prev) => ({ ...prev, region }))} />
             </label>
             <label className="block space-y-2">
               <span className="text-sm font-medium text-slate-700">电话</span>

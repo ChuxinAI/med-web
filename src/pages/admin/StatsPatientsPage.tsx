@@ -7,6 +7,7 @@ import { getPatientAge } from '../../lib/patient'
 import { PatientEditModal } from '../../components/PatientEditModal'
 import { HorizontalScroll } from '../../components/HorizontalScroll'
 import type { Patient } from '../../types'
+import { getCityFromRegion } from '../../lib/region'
 
 export function AdminPatientsPage() {
   const { data: patients } = useDoctorPatients()
@@ -20,7 +21,7 @@ export function AdminPatientsPage() {
     const keyword = q.trim()
     return (patients ?? []).filter((p) => {
       if (!keyword) return true
-      return [p.id, p.name, p.doctorName, p.region, p.phone, p.email]
+      return [p.id, p.name, p.doctorName, getCityFromRegion(p.region), p.phone, p.email]
         .filter(Boolean)
         .join(' ')
         .includes(keyword)
@@ -46,7 +47,7 @@ export function AdminPatientsPage() {
               setQ(e.target.value)
               setPage(1)
             }}
-            placeholder="检索：医生/患者/地区/电话/邮箱/ID"
+            placeholder="检索：医生/患者/城市/电话/邮箱/ID"
             className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-80"
           />
         </div>
@@ -63,7 +64,7 @@ export function AdminPatientsPage() {
                     {p.id} · 医生：{p.doctorName ?? '-'}
                   </div>
                   <div className="mt-2 text-sm text-slate-700">
-                    {getPatientAge(p) != null ? `${getPatientAge(p)} 岁` : ''}{p.region ? ` · ${p.region}` : ''}
+                    {getPatientAge(p) != null ? `${getPatientAge(p)} 岁` : ''}{getCityFromRegion(p.region) ? ` · ${getCityFromRegion(p.region)}` : ''}
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
                     {[p.phone, p.email].filter(Boolean).join(' · ') || '—'}
@@ -79,10 +80,10 @@ export function AdminPatientsPage() {
                   编辑
                 </button>
                 <Link
-                  to={`/admin/stats/cases?patientId=${encodeURIComponent(p.id)}`}
+                  to={`/admin/stats/consultations?patientId=${encodeURIComponent(p.id)}`}
                   className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  查看病例
+                  问诊记录
                 </Link>
               </div>
             </div>
@@ -98,11 +99,11 @@ export function AdminPatientsPage() {
           <table className="w-full min-w-[980px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
-                <th className="w-[16%] px-4 py-3">患者ID</th>
+                <th className="w-[12%] px-4 py-3">患者ID</th>
                 <th className="w-[14%] px-4 py-3">医生</th>
                 <th className="w-[14%] px-4 py-3">患者</th>
                 <th className="w-[10%] px-4 py-3">年龄</th>
-                <th className="w-[14%] px-4 py-3">地区</th>
+                <th className="w-[14%] px-4 py-3">城市</th>
                 <th className="w-[16%] px-4 py-3">电话</th>
                 <th className="w-[22%] px-4 py-3">邮箱</th>
                 <th className="w-[14%] px-4 py-3 text-center">操作</th>
@@ -111,11 +112,13 @@ export function AdminPatientsPage() {
             <tbody className="divide-y divide-slate-100">
               {pageItems.map((p) => (
                 <tr key={p.id} className="hover:bg-white/50">
-                  <td className="px-4 py-3 font-semibold text-ink">{p.id}</td>
+                  <td className="truncate px-4 py-3 font-semibold text-ink" title={p.id}>
+                    {p.id}
+                  </td>
                   <td className="px-4 py-3 text-slate-700">{p.doctorName ?? '-'}</td>
                   <td className="px-4 py-3 text-slate-700">{p.name}</td>
                   <td className="px-4 py-3 text-slate-700">{getPatientAge(p) ?? ''}</td>
-                  <td className="px-4 py-3 text-slate-700">{p.region ?? '-'}</td>
+                  <td className="px-4 py-3 text-slate-700">{getCityFromRegion(p.region)}</td>
                   <td className="px-4 py-3 text-slate-700">{p.phone ?? '-'}</td>
                   <td className="truncate px-4 py-3 text-slate-700">{p.email ?? '-'}</td>
                   <td className="px-4 py-3 text-center">
@@ -128,10 +131,10 @@ export function AdminPatientsPage() {
                         编辑
                       </button>
                       <Link
-                        to={`/admin/stats/cases?patientId=${encodeURIComponent(p.id)}`}
+                        to={`/admin/stats/consultations?patientId=${encodeURIComponent(p.id)}`}
                         className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
                       >
-                        查看病例
+                        问诊记录
                       </Link>
                     </div>
                   </td>

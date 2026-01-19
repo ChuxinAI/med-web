@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useDoctorCases } from '../../api/queries'
+import { useSearchParams } from 'react-router-dom'
+import { useDoctorCases, useDoctorPatients } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { ConsultationWorkspaceModal } from '../../components/ConsultationWorkspaceModal'
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
@@ -8,7 +9,10 @@ import { HorizontalScroll } from '../../components/HorizontalScroll'
 import { formatDateTime } from '../../lib/datetime'
 
 export function ConsultationsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const patientIdFilter = searchParams.get('patientId')
   const { data: cases } = useDoctorCases()
+  const { data: patients } = useDoctorPatients()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<'all' | 'open' | 'in_review' | 'closed'>('all')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
@@ -16,18 +20,26 @@ export function ConsultationsPage() {
   const [pageSize, setPageSize] = useState(10)
   const [openId, setOpenId] = useState<string | null>(null)
 
+  const filteredPatientName = useMemo(() => {
+    if (!patientIdFilter) return null
+    const matched = (patients ?? []).find((p) => p.id === patientIdFilter)
+    return matched?.name ?? patientIdFilter
+  }, [patientIdFilter, patients])
+
   const filtered = useMemo(() => {
     const keyword = q.trim()
     return (cases ?? [])
+      .filter((item) => {
+        if (!patientIdFilter) return true
+        if (filteredPatientName && filteredPatientName !== patientIdFilter) {
+          return item.patientName === filteredPatientName
+        }
+        return item.patientName?.includes(patientIdFilter)
+      })
       .filter((item) => (status === 'all' ? true : item.status === status))
       .filter((item) => {
         if (!keyword) return true
-        const haystack = [
-          item.id,
-          item.patientName,
-          item.symptomsText,
-          item.diagnosisText,
-        ]
+        const haystack = [item.id, item.patientName, item.symptomsText, item.diagnosisText]
           .filter(Boolean)
           .join(' ')
         return haystack.includes(keyword)
@@ -36,7 +48,7 @@ export function ConsultationsPage() {
         const dir = order === 'asc' ? 1 : -1
         return (a.createdAt > b.createdAt ? 1 : -1) * dir
       })
-  }, [cases, order, q, status])
+  }, [cases, filteredPatientName, order, patientIdFilter, q, status])
 
   const total = filtered.length
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
@@ -58,7 +70,7 @@ export function ConsultationsPage() {
                 setQ(e.target.value)
                 setPage(1)
               }}
-              placeholder="检索：患者/症状/诊断/ID"
+              placeholder="检索：患者/症状/病症/ID"
               className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-72"
             />
             <select
@@ -74,6 +86,22 @@ export function ConsultationsPage() {
               <option value="in_review">in_review</option>
               <option value="closed">closed</option>
             </select>
+            {patientIdFilter ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev)
+                    next.delete('patientId')
+                    return next
+                  })
+                }}
+                className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                title="清除患者筛选"
+              >
+                患者：{filteredPatientName ?? patientIdFilter} ×
+              </button>
+            ) : null}
             <CreatedAtSortToggle
               order={order}
               onToggle={() => {
@@ -99,8 +127,12 @@ export function ConsultationsPage() {
                       <div className="mt-1">{item.symptomsText ?? '-'}</div>
                     </div>
                     <div className="mt-2 text-sm text-slate-700">
-                      <span className="text-xs font-semibold text-slate-500">诊断</span>
+                      <span className="text-xs font-semibold text-slate-500">病症</span>
                       <div className="mt-1">{item.diagnosisText ?? '-'}</div>
+                    </div>
+                    <div className="mt-2 text-sm text-slate-700">
+                      <span className="text-xs font-semibold text-slate-500">方剂</span>
+                      <div className="mt-1">{item.formulaName ?? '-'}</div>
                     </div>
                     <div className="mt-2 text-xs text-slate-500">更新：{formatDateTime(item.updatedAt)}</div>
                   </div>
@@ -111,7 +143,7 @@ export function ConsultationsPage() {
                     onClick={() => setOpenId(item.id)}
                     className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-emerald-700"
                   >
-                    查看对话
+                    查看操作
                   </button>
                 </div>
               </div>
@@ -124,21 +156,24 @@ export function ConsultationsPage() {
 
         <div className="hidden lg:block">
           <HorizontalScroll className="touch-pan-x overscroll-x-contain rounded-2xl border border-slate-100 bg-white/70">
-            <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+            <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
-                  <th className="w-[18%] px-4 py-3">问诊ID</th>
+                  <th className="w-[12%] px-4 py-3">问诊ID</th>
                   <th className="w-[14%] px-4 py-3">患者</th>
-                  <th className="w-[28%] px-4 py-3">症状</th>
-                  <th className="w-[30%] px-4 py-3">诊断结果</th>
-                  <th className="w-[14%] px-4 py-3">更新时间</th>
-                  <th className="w-[10%] px-4 py-3 text-center">对话</th>
+                  <th className="w-[24%] px-4 py-3">症状</th>
+                  <th className="w-[22%] px-4 py-3">病症</th>
+                  <th className="w-[16%] px-4 py-3">方剂</th>
+                  <th className="w-[12%] px-4 py-3">更新时间</th>
+                  <th className="w-[10%] px-4 py-3 text-center">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {pageItems.map((item) => (
                   <tr key={item.id} className="hover:bg-white/50">
-                    <td className="px-4 py-3 font-semibold text-ink">{item.id}</td>
+                    <td className="truncate px-4 py-3 font-semibold text-ink" title={item.id}>
+                      {item.id}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="font-semibold text-ink">{item.patientName}</div>
                       <div className="text-xs text-slate-500">
@@ -150,6 +185,9 @@ export function ConsultationsPage() {
                     </td>
                     <td className="truncate px-4 py-3 text-slate-700" title={item.diagnosisText ?? ''}>
                       {item.diagnosisText ?? '-'}
+                    </td>
+                    <td className="truncate px-4 py-3 text-slate-700" title={item.formulaName ?? ''}>
+                      {item.formulaName ?? '-'}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-700">{formatDateTime(item.updatedAt)}</td>
                     <td className="px-4 py-3 text-center">
@@ -165,7 +203,7 @@ export function ConsultationsPage() {
                 ))}
                 {pageItems.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                       无匹配记录
                     </td>
                   </tr>

@@ -140,7 +140,7 @@ export function CasesPage() {
           <table className="w-full min-w-[900px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
-                <th className="w-36 px-4 py-3">病例ID</th>
+                <th className="w-28 px-4 py-3">病例ID</th>
                 <th className="w-28 px-4 py-3">患者</th>
                 <th className="px-4 py-3">诊断结果</th>
                 <th className="w-48 px-4 py-3">治疗方剂名</th>
@@ -151,8 +151,8 @@ export function CasesPage() {
             <tbody className="divide-y divide-slate-100">
               {pageItems.map((item) => (
                 <tr key={item.id} className="hover:bg-white/50">
-                  <td className="px-4 py-3">
-                    <Link to={`/doctor/cases/${item.id}`} className="font-semibold text-ink hover:underline">
+                  <td className="truncate px-4 py-3" title={item.id}>
+                    <Link to={`/doctor/cases/${item.id}`} className="block truncate font-semibold text-ink hover:underline">
                       {item.id}
                     </Link>
                   </td>

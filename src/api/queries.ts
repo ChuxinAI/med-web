@@ -13,6 +13,7 @@ import {
   fetchCaseMessages,
   fetchConsultationDraft,
   fetchCatalog,
+  fetchDiseases,
   fetchDoctorCases,
   fetchDoctorPatients,
   fetchKnowledgeFiles,
@@ -27,6 +28,9 @@ import {
   updateConsultationDraft,
   updateMedicalCase,
   uploadKnowledgeFiles,
+  createDisease,
+  updateDisease,
+  fetchAdminStats,
 } from './mockApi'
 
 export const useLogin = (username?: string, password?: string) =>
@@ -63,6 +67,9 @@ export const useCaseSuggestions = (caseId?: string) =>
 export const useAdminUsers = () =>
   useQuery({ queryKey: ['admin', 'users'], queryFn: fetchUsers })
 
+export const useAdminStats = () =>
+  useQuery({ queryKey: ['admin', 'stats'], queryFn: fetchAdminStats })
+
 export const useUpdateAdminUser = () => {
   const queryClient = useQueryClient()
   return useMutation({
@@ -90,6 +97,30 @@ export const useResetAdminUserPassword = () =>
 
 export const useCatalog = () =>
   useQuery({ queryKey: ['catalog'], queryFn: fetchCatalog })
+
+export const useDiseases = () =>
+  useQuery({ queryKey: ['admin', 'diseases'], queryFn: fetchDiseases })
+
+export const useCreateDisease = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: Parameters<typeof createDisease>[0]) => createDisease(args),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'] })
+    },
+  })
+}
+
+export const useUpdateDisease = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { diseaseId: string; patch: Parameters<typeof updateDisease>[1] }) =>
+      updateDisease(args.diseaseId, args.patch),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'] })
+    },
+  })
+}
 
 export const useAuditLogs = () =>
   useQuery({ queryKey: ['audits'], queryFn: fetchAuditLogs })

@@ -142,7 +142,7 @@ export function AdminCasesStatsPage() {
             <table className="w-full min-w-[980px] table-fixed text-left text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
-                  <th className="w-[18%] px-4 py-3">病例ID</th>
+                  <th className="w-[12%] px-4 py-3">病例ID</th>
                   <th className="w-[14%] px-4 py-3">医生</th>
                   <th className="w-[14%] px-4 py-3">患者</th>
                   <th className="w-[28%] px-4 py-3">诊断结果</th>
@@ -153,7 +153,9 @@ export function AdminCasesStatsPage() {
               <tbody className="divide-y divide-slate-100">
                 {pageItems.map((c) => (
                   <tr key={c.id} className="hover:bg-white/50">
-                    <td className="px-4 py-3 font-semibold text-ink">{c.id}</td>
+                    <td className="truncate px-4 py-3 font-semibold text-ink" title={c.id}>
+                      {c.id}
+                    </td>
                     <td className="px-4 py-3 text-slate-700">{c.doctorName ?? '-'}</td>
                     <td className="px-4 py-3 text-slate-700">{c.patientName}</td>
                     <td className="truncate px-4 py-3 text-slate-700" title={c.diagnosis}>

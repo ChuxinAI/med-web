@@ -1,21 +1,20 @@
 import { useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
   useCaseMessages,
   useCaseSuggestions,
   useConsultationDraft,
   useCreateDoctorPatient,
-  useCreateMedicalCaseFromConsultation,
   useDoctorPatients,
   useSendConsultationMessage,
   useUpdateConsultationDraft,
 } from '../api/queries'
+import { CaseBuilderModal } from './CaseBuilderModal'
 import { ChatMessage } from './ChatMessage'
 import { Card } from './Card'
 import { CaseBuilderPanel } from './CaseBuilderPanel'
 
 export function DoctorWorkspace({ consultationId }: { consultationId?: string }) {
-  const navigate = useNavigate()
   const { caseId } = useParams()
   const activeId = consultationId ?? caseId
   const { data: messages } = useCaseMessages(activeId)
@@ -25,18 +24,57 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   const createPatient = useCreateDoctorPatient()
   const updateDraft = useUpdateConsultationDraft()
   const sendMessage = useSendConsultationMessage()
-  const createCase = useCreateMedicalCaseFromConsultation()
 
   const groupedMessages = useMemo(() => messages ?? [], [messages])
 
   const [input, setInput] = useState('')
+  const [casePanelOpen, setCasePanelOpen] = useState(false)
+
+  const caseBuilder = !draft || !activeId ? (
+    <div className="text-slate-600">正在加载草稿...</div>
+  ) : (
+    <CaseBuilderPanel
+      consultationId={activeId}
+      draft={draft}
+      patients={patients ?? []}
+      suggestion={suggestion}
+      saving={updateDraft.isPending}
+      onCreatePatient={(input) => createPatient.mutateAsync(input)}
+      onSaveDraft={async (next) => {
+        await updateDraft.mutateAsync({
+          consultationId: activeId,
+          patch: {
+            patientId: next.patientId,
+            symptoms: next.symptoms,
+            diagnosis: next.diagnosis,
+            formulaName: next.formulaName,
+            formulaDetail: next.formulaDetail,
+            usageNote: next.usageNote,
+            note: next.note,
+            status: next.status,
+          },
+        })
+      }}
+    />
+  )
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
         <Card
           title="问诊对话"
-          action={<span className="text-xs text-slate-500">来源标注：规则 / RAG / 模型</span>}
+          action={
+            <div className="flex items-center gap-2">
+              <span className="hidden text-xs text-slate-500 lg:inline">来源标注：规则 / RAG / 模型</span>
+              <button
+                type="button"
+                onClick={() => setCasePanelOpen(true)}
+                className="inline-flex h-8 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 lg:hidden"
+              >
+                问诊记录
+              </button>
+            </div>
+          }
         >
           <div className="flex flex-col gap-3">
             {groupedMessages.map((m) => (
@@ -81,47 +119,15 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
           </div>
         </Card>
       </div>
-      <div className="space-y-4">
-        <Card title="病例构建器" action={<span className="text-xs text-slate-500">候选点击即确认</span>}>
-          {!draft || !activeId ? (
-            <div className="text-slate-600">正在加载草稿...</div>
-          ) : (
-            <CaseBuilderPanel
-              consultationId={activeId}
-              draft={draft}
-              patients={patients ?? []}
-              suggestion={suggestion}
-              saving={updateDraft.isPending}
-              writing={createCase.isPending}
-              onCreatePatient={(input) => createPatient.mutateAsync(input)}
-              onSaveDraft={async (next) => {
-                await updateDraft.mutateAsync({
-                  consultationId: activeId,
-                  patch: {
-                    patientId: next.patientId,
-                    symptoms: next.symptoms,
-                    diagnosis: next.diagnosis,
-                    formulaName: next.formulaName,
-                    formulaDetail: next.formulaDetail,
-                    usageNote: next.usageNote,
-                    note: next.note,
-                    status: next.status,
-                  },
-                })
-              }}
-              onWriteCase={async () => {
-                try {
-                  const created = await createCase.mutateAsync({ consultationId: activeId })
-                  navigate(`/doctor/cases/${created.id}`)
-                } catch (e) {
-                  const message = e instanceof Error ? e.message : '写入失败'
-                  window.alert(message)
-                }
-              }}
-            />
-          )}
+      <div className="hidden space-y-4 lg:block">
+        <Card title="问诊记录" action={<span className="text-xs text-slate-500">候选点击即确认</span>}>
+          {caseBuilder}
         </Card>
       </div>
+
+      <CaseBuilderModal open={casePanelOpen} onClose={() => setCasePanelOpen(false)}>
+        {caseBuilder}
+      </CaseBuilderModal>
     </div>
   )
 }

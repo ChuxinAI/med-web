@@ -24,6 +24,7 @@ export interface CaseSummary {
   chiefComplaint: string
   symptomsText?: string
   diagnosisText?: string
+  formulaName?: string
   createdAt: string
   updatedAt: string
   doctorName: string
@@ -89,6 +90,16 @@ export interface CatalogEntry {
   linkedTo?: string[]
 }
 
+export interface Disease {
+  id: string
+  name: string
+  symptoms: string
+  formula: string
+  note?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AuditLogEntry {
   id: string
   actor: string
@@ -123,6 +134,13 @@ export interface MedicalCaseSummary {
   consultationId?: string
   updatedAt: string
   createdAt: string
+}
+
+export interface AdminStats {
+  doctorConsultations: { doctorName: string; count: number }[]
+  syndromeConsultations: { syndrome: string; count: number }[]
+  formulaConsultations: { formula: string; count: number }[]
+  doctorCityCounts: { city: string; count: number }[]
 }
 
 export interface MedicalCaseDetails extends MedicalCaseSummary {

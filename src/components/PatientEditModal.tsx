@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Patient } from '../types'
 import { InlineNotice } from './InlineNotice'
+import { RegionSelect } from './RegionSelect'
 
 export function PatientEditModal({
   open,
@@ -161,10 +162,9 @@ function PatientEditForm({
           </label>
           <label className="space-y-2">
             <span className="text-xs font-semibold text-slate-600">地区</span>
-            <input
+            <RegionSelect
               value={editing.region}
-              onChange={(e) => setEditing((p) => ({ ...p, region: e.target.value }))}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              onChange={(region) => setEditing((p) => ({ ...p, region }))}
             />
           </label>
           <label className="space-y-2">

@@ -66,7 +66,7 @@ export function StartConsultationPage() {
           </Card>
         </div>
         <div className="space-y-4">
-          <Card title="病例构建器">
+          <Card title="问诊记录">
             <div className="space-y-3">
               <label className="block space-y-2">
                 <span className="text-xs font-semibold text-slate-600">关联患者（可选）</span>
@@ -83,7 +83,7 @@ export function StartConsultationPage() {
                   ))}
                 </select>
                 <p className="text-xs text-slate-500">
-                  写入病例前必须先关联患者；可在问诊过程中再选择/创建。
+                  建议先关联患者；可在问诊过程中再选择/创建。
                 </p>
               </label>
 

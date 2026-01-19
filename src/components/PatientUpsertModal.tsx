@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Patient } from '../types'
+import { RegionSelect } from './RegionSelect'
 
 export function PatientUpsertModal({
   open,
@@ -131,11 +132,7 @@ export function PatientUpsertModal({
             </label>
             <label className="space-y-2">
               <span className="text-xs font-semibold text-slate-600">地区</span>
-              <input
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-              />
+              <RegionSelect value={region} onChange={setRegion} />
             </label>
             <label className="space-y-2">
               <span className="text-xs font-semibold text-slate-600">电话</span>

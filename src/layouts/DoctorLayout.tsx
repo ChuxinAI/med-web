@@ -5,7 +5,6 @@ const navItems = [
   { label: '开始问诊', to: '/doctor/chat' },
   { label: '问诊记录', to: '/doctor/consultations' },
   { label: '患者管理', to: '/doctor/patients' },
-  { label: '病例管理', to: '/doctor/cases' },
   { label: '个人资料', to: '/doctor/settings' },
 ]
 

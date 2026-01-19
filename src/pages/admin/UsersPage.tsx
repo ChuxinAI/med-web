@@ -12,6 +12,8 @@ import { formatDateTime } from '../../lib/datetime'
 import type { UserSummary } from '../../types'
 import { InlineNotice } from '../../components/InlineNotice'
 import { HorizontalScroll } from '../../components/HorizontalScroll'
+import { RegionSelect } from '../../components/RegionSelect'
+import { getCityFromRegion } from '../../lib/region'
 
 export function UsersPage() {
   const { data: users } = useAdminUsers()
@@ -50,7 +52,7 @@ export function UsersPage() {
         const haystack = [
           u.username ?? u.name,
           u.realName ?? '',
-          u.region ?? '',
+          getCityFromRegion(u.region),
           u.phone ?? '',
           u.email ?? '',
           u.org ?? '',
@@ -98,7 +100,7 @@ export function UsersPage() {
                 setQ(e.target.value)
                 setPage(1)
               }}
-              placeholder="检索：用户名/姓名/单位/电话/邮箱/地区"
+              placeholder="检索：用户名/姓名/单位/电话/邮箱/城市"
               className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-72"
             />
             <select
@@ -151,7 +153,7 @@ export function UsersPage() {
                   <div className="min-w-0">
                     <div className="font-semibold text-ink">{u.username ?? u.name}</div>
                     <div className="mt-1 text-xs text-slate-500">
-                      {(u.realName ?? '-')}{u.region ? ` · ${u.region}` : ''} · {u.role === 'doctor' ? '医生' : '管理员'}
+                      {(u.realName ?? '-')}{getCityFromRegion(u.region) ? ` · ${getCityFromRegion(u.region)}` : ''} · {u.role === 'doctor' ? '医生' : '管理员'}
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                       {[u.phone, u.email].filter(Boolean).join(' · ') || '—'}
@@ -188,7 +190,7 @@ export function UsersPage() {
                   <th className="w-[13%] px-4 py-3">用户名</th>
                   <th className="w-[13%] px-4 py-3">真实姓名</th>
                   <th className="w-[9%] px-4 py-3">类型</th>
-                  <th className="w-[9%] px-4 py-3">地区</th>
+                  <th className="w-[9%] px-4 py-3">城市</th>
                   <th className="w-[12%] px-4 py-3">电话</th>
                   <th className="w-[20%] px-4 py-3">邮箱</th>
                   <th className="w-[12%] px-4 py-3 text-center">状态</th>
@@ -201,7 +203,7 @@ export function UsersPage() {
                     <td className="truncate px-4 py-3 font-semibold text-ink">{u.username ?? u.name}</td>
                     <td className="truncate px-4 py-3 text-slate-700">{u.realName ?? '-'}</td>
                     <td className="px-4 py-3 text-slate-700">{u.role === 'doctor' ? '医生' : '管理员'}</td>
-                    <td className="truncate px-4 py-3 text-slate-700">{u.region ?? '-'}</td>
+                    <td className="truncate px-4 py-3 text-slate-700">{getCityFromRegion(u.region)}</td>
                     <td className="truncate px-4 py-3 text-slate-700">{u.phone ?? '-'}</td>
                     <td className="truncate px-4 py-3 text-slate-700">{u.email ?? '-'}</td>
                     <td className="px-4 py-3 text-center">
@@ -427,11 +429,7 @@ function UserEditModal({
             </label>
             <label className="space-y-2">
               <span className="text-xs font-semibold text-slate-600">地区</span>
-              <input
-                value={draft.region}
-                onChange={(e) => onChange({ ...draft, region: e.target.value })}
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-              />
+              <RegionSelect value={draft.region} onChange={(region) => onChange({ ...draft, region })} />
             </label>
             <label className="space-y-2">
               <span className="text-xs font-semibold text-slate-600">电话</span>

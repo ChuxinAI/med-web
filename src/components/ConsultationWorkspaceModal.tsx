@@ -5,7 +5,6 @@ import {
   useCaseSuggestions,
   useConsultationDraft,
   useCreateDoctorPatient,
-  useCreateMedicalCaseFromConsultation,
   useDoctorPatients,
   useSendConsultationMessage,
   useUpdateConsultationDraft,
@@ -39,7 +38,6 @@ export function ConsultationWorkspaceModal({
   const { data: draft } = useConsultationDraft(consultationId ?? undefined)
   const updateDraft = useUpdateConsultationDraft()
   const sendMessage = useSendConsultationMessage()
-  const createCase = useCreateMedicalCaseFromConsultation()
 
   const [input, setInput] = useState('')
   const [pending, setPending] = useState(false)
@@ -142,7 +140,7 @@ export function ConsultationWorkspaceModal({
 
           <div className="col-span-1 flex min-h-0 flex-col">
             <Card
-              title="病例记录"
+              title="问诊记录"
               className="flex-1 min-h-0 flex flex-col"
               bodyClassName="flex-1 min-h-0 overflow-y-auto"
             >
@@ -155,7 +153,6 @@ export function ConsultationWorkspaceModal({
                   patients={patients ?? []}
                   suggestion={suggestion}
                   saving={updateDraft.isPending}
-                  writing={createCase.isPending}
                   readOnly={readOnly}
                   onCreatePatient={(input) => createPatient.mutateAsync(input)}
                   onSaveDraft={async (next) => {
@@ -172,10 +169,6 @@ export function ConsultationWorkspaceModal({
                         status: next.status,
                       },
                     })
-                  }}
-                  onWriteCase={async () => {
-                    if (readOnly) return
-                    await createCase.mutateAsync({ consultationId })
                   }}
                 />
               )}

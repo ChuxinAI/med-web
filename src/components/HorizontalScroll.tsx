@@ -17,12 +17,20 @@ export function HorizontalScroll({
   })
   const [dragging, setDragging] = useState(false)
 
+  const isInteractiveTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) return false
+    return Boolean(
+      target.closest('button, a, input, textarea, select, label, [data-scroll-lock="true"]'),
+    )
+  }
+
   return (
     <div
       ref={containerRef}
       className={clsx('scroll-x', dragging ? 'select-none' : '', className)}
       onPointerDown={(event) => {
         if (event.pointerType === 'mouse' && event.button !== 0) return
+        if (isInteractiveTarget(event.target)) return
         const el = containerRef.current
         if (!el) return
 
@@ -67,4 +75,3 @@ export function HorizontalScroll({
     </div>
   )
 }
-

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 export function DoctorLoginPage() {
   const navigate = useNavigate()
@@ -58,6 +58,14 @@ export function DoctorLoginPage() {
             >
               登录
             </button>
+            <div className="text-center text-sm">
+              <Link
+                to="/doctor/register"
+                className="font-medium text-primary-600 transition hover:text-primary-700"
+              >
+                新用户注册
+              </Link>
+            </div>
           </form>
         </div>
       </div>
