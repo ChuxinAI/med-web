@@ -31,6 +31,7 @@ import {
   mockUsers,
   mockDiseases,
 } from './mockData'
+import * as XLSX from 'xlsx'
 
 const wait = (ms = 220) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -316,6 +317,61 @@ export async function createDisease(
   }
   mockDiseases.unshift(created)
   return created
+}
+
+export async function importDiseasesFromFile(
+  file: File,
+): Promise<{ imported: number; skipped: number }> {
+  await wait()
+
+  const data = await file.arrayBuffer()
+  const workbook = XLSX.read(data, { type: 'array' })
+  const sheetName = workbook.SheetNames[0]
+  const sheet = sheetName ? workbook.Sheets[sheetName] : undefined
+  if (!sheet) {
+    throw new Error('未找到可用的表格数据')
+  }
+
+  const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
+    defval: '',
+    raw: false,
+  })
+
+  const now = new Date().toISOString()
+  let imported = 0
+  let skipped = 0
+
+  rows.forEach((row) => {
+    const normalized: Record<string, string> = {}
+    Object.entries(row).forEach(([key, value]) => {
+      normalized[key.trim().toLowerCase()] = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+    })
+
+    const name = normalized.name || normalized['病症名'] || normalized['疾病'] || normalized['病症']
+    const symptoms = normalized.symptom || normalized.symptoms || normalized['症状'] || normalized['诊断']
+    const formula = normalized.forumula || normalized.formula || normalized['方剂'] || normalized['方剂名']
+    const note = normalized.notes || normalized.note || normalized['备注']
+
+    if (!name) {
+      skipped += 1
+      return
+    }
+
+    const id = 'DIS-' + Date.now().toString().slice(-6) + '-' + Math.floor(Math.random() * 1000).toString().padStart(3, '0')
+    const created: Disease = {
+      id,
+      name,
+      symptoms: symptoms ?? '',
+      formula: formula ?? '',
+      note: note || undefined,
+      createdAt: now,
+      updatedAt: now,
+    }
+    mockDiseases.unshift(created)
+    imported += 1
+  })
+
+  return { imported, skipped }
 }
 
 export async function updateDisease(

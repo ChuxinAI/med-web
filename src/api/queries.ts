@@ -30,6 +30,7 @@ import {
   uploadKnowledgeFiles,
   createDisease,
   updateDisease,
+  importDiseasesFromFile,
   fetchAdminStats,
 } from './mockApi'
 
@@ -116,6 +117,16 @@ export const useUpdateDisease = () => {
   return useMutation({
     mutationFn: (args: { diseaseId: string; patch: Parameters<typeof updateDisease>[1] }) =>
       updateDisease(args.diseaseId, args.patch),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'] })
+    },
+  })
+}
+
+export const useImportDiseases = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { file: File }) => importDiseasesFromFile(args.file),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'] })
     },

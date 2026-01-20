@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCreateDisease, useDiseases, useUpdateDisease } from '../../api/queries'
+import { useCreateDisease, useDiseases, useImportDiseases, useUpdateDisease } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
 import { DiseaseEditModal } from '../../components/DiseaseEditModal'
@@ -13,6 +13,7 @@ export function CatalogPage() {
   const { data: diseases } = useDiseases()
   const createDisease = useCreateDisease()
   const updateDisease = useUpdateDisease()
+  const importDiseases = useImportDiseases()
 
   const [q, setQ] = useState('')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
@@ -21,6 +22,8 @@ export function CatalogPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<Disease | null>(null)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
+  const [importing, setImporting] = useState(false)
+  const fileInputId = 'disease-batch-import'
 
   const filtered = useMemo(() => {
     const keyword = q.trim()
@@ -67,16 +70,55 @@ export function CatalogPage() {
               setPage(1)
             }}
           />
+          <input
+            id={fileInputId}
+            type="file"
+            accept=".xlsx,.xls"
+            disabled={importing}
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              setNotice(null)
+              setImporting(true)
+              try {
+                const result = await importDiseases.mutateAsync({ file })
+                setNotice({
+                  tone: 'success',
+                  message: `已导入 ${result.imported} 条，跳过 ${result.skipped} 条。`,
+                })
+              } catch (error) {
+                setNotice({
+                  tone: 'error',
+                  message: error instanceof Error ? error.message : '导入失败',
+                })
+              } finally {
+                setImporting(false)
+                e.currentTarget.value = ''
+              }
+            }}
+          />
           <button
             type="button"
             onClick={() => {
               setNotice(null)
               setCreateOpen(true)
             }}
-            className="h-9 w-full rounded-xl bg-primary-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700 sm:w-auto"
+            className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-emerald-700 sm:w-auto"
           >
             新增病症
           </button>
+          <label
+            htmlFor={fileInputId}
+            className={`inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-emerald-700 sm:w-auto ${
+              importing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+            }`}
+          >
+            批量导入
+          </label>
+          <a href="/example.xlsx" download className="text-xs text-slate-500 hover:text-slate-700">
+            下载示例
+          </a>
         </div>
       }
     >
