@@ -17,7 +17,7 @@ export function KnowledgePage() {
           {catalog?.map((item) => (
             <div key={item.id} className="rounded-xl border border-slate-100 bg-white/80 p-3 shadow-sm">
               <div className="flex items-center justify-between">
-                <p className="font-semibold text-ink">{item.name}</p>
+                <p className="text-ink">{item.name}</p>
                 <Badge tone="info">disease</Badge>
               </div>
               <p className="mt-1 text-xs text-slate-500">

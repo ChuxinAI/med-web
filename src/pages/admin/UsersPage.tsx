@@ -203,7 +203,7 @@ export function UsersPage() {
               <div key={u.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-semibold text-ink">{u.username ?? '-'}</div>
+                    <div className="text-ink">{u.username ?? '-'}</div>
                     <div className="mt-1 text-xs text-slate-500">
                       {(u.name ?? '-')}{getCityFromRegion(u.region) ? ` · ${getCityFromRegion(u.region)}` : ''} · {u.role === 'doctor' ? '医生' : '管理员'}
                     </div>
@@ -252,7 +252,7 @@ export function UsersPage() {
               <tbody className="divide-y divide-slate-100">
                 {pageItems.map((u) => (
                   <tr key={u.id} className="hover:bg-white/50">
-                    <td className="truncate px-4 py-3 font-semibold text-ink">{u.username ?? '-'}</td>
+                    <td className="truncate px-4 py-3 text-ink">{u.username ?? '-'}</td>
                     <td className="truncate px-4 py-3 text-slate-700">{u.name ?? '-'}</td>
                     <td className="px-4 py-3 text-slate-700">{u.role === 'doctor' ? '医生' : '管理员'}</td>
                     <td className="truncate px-4 py-3 text-slate-700">{getCityFromRegion(u.region)}</td>

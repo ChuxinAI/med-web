@@ -59,7 +59,7 @@ export function AdminPatientsPage() {
             <div key={p.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-semibold text-ink">{p.name}</div>
+                  <div className="text-ink">{p.name}</div>
                   <div className="mt-1 text-xs text-slate-500">
                     {p.id} · 医生：{p.doctorName ?? '-'}
                   </div>
@@ -109,7 +109,7 @@ export function AdminPatientsPage() {
             <tbody className="divide-y divide-slate-100">
               {pageItems.map((p) => (
                 <tr key={p.id} className="hover:bg-white/50">
-                  <td className="truncate px-4 py-3 font-semibold text-ink" title={p.id}>
+                  <td className="truncate px-4 py-3 text-ink" title={p.id}>
                     {p.id}
                   </td>
                   <td className="px-4 py-3 text-slate-700">{p.doctorName ?? '-'}</td>

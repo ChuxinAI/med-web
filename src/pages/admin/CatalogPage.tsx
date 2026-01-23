@@ -206,7 +206,7 @@ export function CatalogPage() {
             <div key={item.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-semibold text-ink">{item.name}</div>
+                  <div className="text-ink">{item.name}</div>
                   <div className="mt-1 text-xs text-slate-500">{item.id}</div>
                   <div className="mt-2 text-sm text-slate-700">
                     <span className="text-xs font-semibold text-slate-500">类型</span>
@@ -285,7 +285,7 @@ export function CatalogPage() {
             <tbody className="divide-y divide-slate-100">
               {pageItems.map((item) => (
                 <tr key={item.id} className="hover:bg-white/50">
-                  <td className="truncate px-4 py-3 font-semibold text-ink" title={item.id}>
+                  <td className="truncate px-4 py-3 text-ink" title={item.id}>
                     {item.id}
                   </td>
                   <td className="truncate px-4 py-3 text-slate-700" title={item.typeCode}>

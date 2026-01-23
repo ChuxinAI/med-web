@@ -80,15 +80,36 @@ export function toConsultationSummary(dto: ConsultationSummaryDto | Consultation
   const patientId = dto.patient_id != null ? String(dto.patient_id) : undefined
   const patientName = dto.patient_name ?? (patientId ? `患者#${patientId}` : '未关联患者')
   const doctorName = dto.doctor_name ?? '—'
+  const patientAge = dto.patient_age ?? 0
+  const fallbackSymptoms =
+    (dto as { symptoms_text?: string | null }).symptoms_text ??
+    (dto as { symptom?: string | null }).symptom ??
+    ''
+  const rawSymptoms = (() => {
+    const direct = dto.symptoms
+    if (Array.isArray(direct)) {
+      return direct.length > 0 ? direct : fallbackSymptoms
+    }
+    if (typeof direct === 'string') {
+      const trimmed = direct.trim()
+      return trimmed ? trimmed : fallbackSymptoms
+    }
+    return fallbackSymptoms
+  })()
+  const symptomsText = Array.isArray(rawSymptoms)
+    ? rawSymptoms.filter(Boolean).join('、')
+    : typeof rawSymptoms === 'string'
+      ? rawSymptoms.trim()
+      : ''
   return {
     id: String(dto.id),
     patientName,
     patientId,
     gender: '男',
-    age: 0,
+    age: patientAge,
     status: dto.status,
     chiefComplaint: dto.summary ?? '（未填写）',
-    symptomsText: dto.symptoms ?? '',
+    symptomsText: symptomsText ?? '',
     diagnosisText: dto.disease ?? '',
     formulaName: dto.formula ?? '',
     createdAt: normalizeIso(dto.created_at),

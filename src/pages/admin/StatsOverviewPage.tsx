@@ -106,7 +106,7 @@ export function AdminStatsOverviewPage() {
           <tbody className="divide-y divide-slate-100">
             {pageItems.map((item) => (
               <tr key={`${activeTab}-${item.name}`} className="hover:bg-white/50">
-                <td className="truncate px-4 py-3 font-semibold text-ink" title={item.name}>
+                <td className="truncate px-4 py-3 text-ink" title={item.name}>
                   {item.name}
                 </td>
                 <td className="px-4 py-3 text-right text-slate-700">{item.count}</td>

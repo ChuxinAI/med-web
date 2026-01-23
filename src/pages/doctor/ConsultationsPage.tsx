@@ -122,10 +122,10 @@ export function ConsultationsPage() {
               <div key={item.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-semibold text-ink">{item.patientName}</div>
+                    <div className="text-ink">{item.patientName}</div>
                     <div className="mt-2 text-sm text-slate-700">
                       <span className="text-xs font-semibold text-slate-500">症状</span>
-                      <div className="mt-1">{item.symptomsText ?? '-'}</div>
+                      <div className="mt-1">{item.symptomsText || '-'}</div>
                     </div>
                     <div className="mt-2 text-sm text-slate-700">
                       <span className="text-xs font-semibold text-slate-500">病症</span>
@@ -182,8 +182,8 @@ export function ConsultationsPage() {
             <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
-                  <th className="w-[10%] px-4 py-3">问诊ID</th>
-                  <th className="w-[14%] px-4 py-3">患者</th>
+                  <th className="w-[8%] px-4 py-3">问诊ID</th>
+                  <th className="w-[8%] px-4 py-3">患者</th>
                   <th className="w-[18%] px-4 py-3">症状</th>
                   <th className="w-[16%] px-4 py-3">病症</th>
                   <th className="w-[12%] px-4 py-3">方剂</th>
@@ -194,14 +194,14 @@ export function ConsultationsPage() {
               <tbody className="divide-y divide-slate-100">
                 {pageItems.map((item) => (
                   <tr key={item.id} className="hover:bg-white/50">
-                    <td className="truncate px-4 py-3 font-semibold text-ink" title={item.id}>
+                    <td className="truncate px-4 py-3 text-ink" title={item.id}>
                       {item.id}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-ink">{item.patientName}</div>
+                      <div className="text-ink">{item.patientName}</div>
                     </td>
                     <td className="truncate px-4 py-3 text-slate-700" title={item.symptomsText ?? ''}>
-                      {item.symptomsText ?? '-'}
+                      {item.symptomsText || '-'}
                     </td>
                     <td className="truncate px-4 py-3 text-slate-700" title={item.diagnosisText ?? ''}>
                       {item.diagnosisText ?? '-'}

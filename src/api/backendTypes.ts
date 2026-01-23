@@ -55,6 +55,7 @@ export interface ConsultationSummaryDto {
   id: string
   patient_id?: number | null
   patient_name?: string | null
+  patient_age?: number | null
   doctor_name?: string | null
   status: 'open' | 'in_review' | 'closed'
   summary?: string | null
@@ -69,6 +70,7 @@ export interface ConsultationDetailDto {
   id: string
   patient_id?: number | null
   patient_name?: string | null
+  patient_age?: number | null
   doctor_name?: string | null
   status: 'open' | 'in_review' | 'closed'
   summary?: string | null

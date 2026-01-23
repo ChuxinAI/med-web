@@ -270,6 +270,8 @@ export const useUpdateConsultationDraft = () => {
       patch: Parameters<typeof updateConsultationDraft>[1]
     }) => updateConsultationDraft(args.consultationId, args.patch),
     onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['cases'] })
+      await queryClient.invalidateQueries({ queryKey: ['case', variables.consultationId] })
       await queryClient.invalidateQueries({
         queryKey: ['consultation', variables.consultationId, 'draft'],
       })

@@ -111,9 +111,7 @@ export function PatientsPage() {
             <div key={p.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <Link to={`/doctor/patients/${p.id}`} className="font-semibold text-ink hover:underline">
-                    {p.name}
-                  </Link>
+                  <span className="text-ink">{p.name}</span>
                   <div className="mt-1 text-xs text-slate-500">{p.id}</div>
                   <div className="mt-2 text-sm text-slate-700">
                     {(p.gender ?? '-')}{getPatientAge(p) != null ? ` · ${getPatientAge(p)} 岁` : ''}
@@ -183,12 +181,10 @@ export function PatientsPage() {
             <tbody className="divide-y divide-slate-100">
               {pageItems.map((p) => (
                 <tr key={p.id} className="hover:bg-white/50">
-                  <td className="truncate px-4 py-3" title={p.id}>
-                    <Link to={`/doctor/patients/${p.id}`} className="block truncate font-semibold text-ink hover:underline">
-                      {p.id}
-                    </Link>
+                  <td className="truncate px-4 py-3 text-ink" title={p.id}>
+                    <span className="block truncate">{p.id}</span>
                   </td>
-                  <td className="px-4 py-3 font-semibold text-ink">{p.name}</td>
+                  <td className="px-4 py-3 text-ink">{p.name}</td>
                   <td className="px-4 py-3 text-slate-700">{p.gender ?? '-'}</td>
                   <td className="px-4 py-3 text-slate-700">{getPatientAge(p) ?? ''}</td>
                   <td className="px-4 py-3 text-slate-700">{getCityFromRegion(p.region)}</td>

@@ -18,19 +18,10 @@ export function DiseaseDetailModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-5">
       <button type="button" onClick={onClose} className="absolute inset-0 bg-black/30" aria-label="关闭病症详情" />
-      <div className="relative flex h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl">
+      <div className="relative flex w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl max-h-[80vh]">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
           <p className="text-sm font-semibold text-ink">{disease?.name ?? '病症详情'}</p>
           <div className="flex items-center gap-2">
-            {onConfirm ? (
-              <button
-                type="button"
-                onClick={onConfirm}
-                className="rounded-xl bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700"
-              >
-                采纳
-              </button>
-            ) : null}
             <button
               type="button"
               onClick={onClose}
@@ -40,7 +31,7 @@ export function DiseaseDetailModal({
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto bg-slate-50 p-5">
+        <div className="flex-1 overflow-y-auto bg-slate-50 p-4">
           {!disease ? (
             <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
               未找到对应病症详情。
@@ -56,6 +47,17 @@ export function DiseaseDetailModal({
               <DetailBlock label="鉴别方法" value={disease.differentiation} />
               <DetailBlock label="方剂" value={disease.formula} />
               <DetailBlock label="备注" value={disease.note ?? ''} />
+              {onConfirm ? (
+                <div className="mt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={onConfirm}
+                    className="w-full rounded-xl bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700"
+                  >
+                    采纳
+                  </button>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
