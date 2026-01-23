@@ -9,8 +9,9 @@ marked.setOptions({
 
 export function RichText({ content, className }: { content: string; className?: string }) {
   const html = useMemo(() => {
-    const raw = marked.parse(content ?? '')
-    return DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } })
+    const raw = marked.parse(content ?? '', { async: false })
+    const safe = typeof raw === 'string' ? raw : ''
+    return DOMPurify.sanitize(safe, { USE_PROFILES: { html: true } })
   }, [content])
 
   return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />

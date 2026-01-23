@@ -172,7 +172,6 @@ export function ChatPage() {
       consultationId={consultationId}
       draft={draft}
       patients={patients ?? []}
-      suggestion={suggestion}
       suggestedSymptoms={suggestedSymptoms}
       saving={updateDraft.isPending}
       onCreatePatient={(input) => createPatient.mutateAsync(input)}
@@ -330,7 +329,6 @@ export function ChatPage() {
                         <ConsultationCandidatePanel
                           suggestion={suggestion}
                           catalog={catalog}
-                          symptomsText={draft?.symptoms}
                           decision={decisionResult?.decision ?? null}
                           decisionReply={decisionResult?.reply}
                           decisionLoading={dialogue.isPending}

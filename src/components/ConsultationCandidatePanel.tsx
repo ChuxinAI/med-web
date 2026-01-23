@@ -5,7 +5,6 @@ import { DiseaseDetailModal } from './DiseaseDetailModal'
 export function ConsultationCandidatePanel({
   suggestion,
   catalog,
-  symptomsText,
   decision,
   decisionReply,
   decisionLoading,
@@ -16,7 +15,6 @@ export function ConsultationCandidatePanel({
 }: {
   suggestion?: ConsultationSuggestion
   catalog?: Disease[]
-  symptomsText?: string
   decision?: ConsultationDecision | null
   decisionReply?: string
   decisionLoading?: boolean

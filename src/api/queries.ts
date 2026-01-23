@@ -76,8 +76,7 @@ export const useChangeMyPassword = () =>
 
 export const useRegisterDoctor = () =>
   useMutation({
-    mutationFn: (args: { username: string; phone?: string; email?: string; password: string }) =>
-      registerDoctor(args),
+    mutationFn: (args: Parameters<typeof registerDoctor>[0]) => registerDoctor(args),
   })
 
 export const useDoctorCases = () =>

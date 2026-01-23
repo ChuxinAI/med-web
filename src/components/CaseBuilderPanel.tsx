@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ConsultationDraft, ConsultationSuggestion, Patient } from '../types'
+import type { ConsultationDraft, Patient } from '../types'
 import { PatientUpsertModal } from './PatientUpsertModal'
 import { getPatientAge } from '../lib/patient'
 
@@ -12,7 +12,6 @@ export function CaseBuilderPanel({
   consultationId,
   draft,
   patients,
-  suggestion,
   suggestedSymptoms = [],
   saving,
   readOnly = false,
@@ -22,7 +21,6 @@ export function CaseBuilderPanel({
   consultationId: string
   draft: ConsultationDraft
   patients: Patient[]
-  suggestion?: ConsultationSuggestion
   suggestedSymptoms?: string[]
   saving: boolean
   readOnly?: boolean

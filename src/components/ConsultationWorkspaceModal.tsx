@@ -157,7 +157,6 @@ export function ConsultationWorkspaceModal({
                   consultationId={consultationId}
                   draft={draft}
                   patients={patients ?? []}
-                  suggestion={suggestion}
                   suggestedSymptoms={suggestedSymptoms}
                   saving={updateDraft.isPending}
                   readOnly={readOnly}

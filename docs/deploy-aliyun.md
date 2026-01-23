@@ -68,9 +68,34 @@ npm run build:online
 ```
 将 `dist/` 上传到服务器，例如 `/home/work/med/site/`。
 
-## 直接启动（无需 Nginx）
+## Nginx 配置
+创建 `/etc/nginx/conf.d/med-web.conf`：
+
+```nginx
+server {
+  listen 80;
+  server_name your.domain.com;
+
+  root /home/work/med/site;
+  index index.html;
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  # 可选：缓存静态资源
+  location ~* \.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff2?)$ {
+    expires 30d;
+    access_log off;
+    add_header Cache-Control "public";
+  }
+}
+```
+
+检查并重载 Nginx：
 ```bash
-npx serve -s /home/work/med/site -l 5174
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
 ## 环境说明

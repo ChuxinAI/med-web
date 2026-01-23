@@ -201,7 +201,6 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
       consultationId={activeId}
       draft={draft}
       patients={patients ?? []}
-      suggestion={suggestion}
       suggestedSymptoms={suggestedSymptoms}
       saving={updateDraft.isPending}
       onCreatePatient={(input) => createPatient.mutateAsync(input)}
@@ -252,13 +251,12 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
                   hideTimestamp={Boolean(streamingMessage && m.id === streamingMessage.id)}
                   footer={
                     m.id === latestAssistantId && m.sender !== 'doctor' ? (
-                      <ConsultationCandidatePanel
-                        suggestion={suggestion}
-                        catalog={catalog}
-                        symptomsText={draft?.symptoms}
-                        decision={decisionResult?.decision ?? null}
-                        decisionReply={decisionResult?.reply}
-                        decisionLoading={dialogue.isPending}
+                    <ConsultationCandidatePanel
+                      suggestion={suggestion}
+                      catalog={catalog}
+                      decision={decisionResult?.decision ?? null}
+                      decisionReply={decisionResult?.reply}
+                      decisionLoading={dialogue.isPending}
                         candidateLoading={candidatePending}
                         onRequestDecision={
                           activeId

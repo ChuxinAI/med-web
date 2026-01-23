@@ -61,7 +61,7 @@ export function CatalogPage() {
     { value: 'syndrome', label: '症候' },
     { value: 'symptom', label: '症状' },
   ]
-  const typeLabelMap = useMemo(() => {
+  const typeLabelMap = useMemo<Record<string, string>>(() => {
     const base = categoryOptions.reduce<Record<string, string>>((acc, item) => {
       acc[item.value] = item.label
       return acc
