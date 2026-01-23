@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ConsultationDraft, ConsultationSuggestion, Patient } from '../types'
 import { PatientUpsertModal } from './PatientUpsertModal'
 import { getPatientAge } from '../lib/patient'
@@ -13,6 +13,7 @@ export function CaseBuilderPanel({
   draft,
   patients,
   suggestion,
+  suggestedSymptoms = [],
   saving,
   readOnly = false,
   onCreatePatient,
@@ -22,6 +23,7 @@ export function CaseBuilderPanel({
   draft: ConsultationDraft
   patients: Patient[]
   suggestion?: ConsultationSuggestion
+  suggestedSymptoms?: string[]
   saving: boolean
   readOnly?: boolean
   onCreatePatient: (input: PatientCreateInput) => Promise<Patient>
@@ -31,16 +33,26 @@ export function CaseBuilderPanel({
   const [patientPickerOpen, setPatientPickerOpen] = useState(false)
   const [patientQuery, setPatientQuery] = useState('')
   const [createPatientOpen, setCreatePatientOpen] = useState(false)
+  const [saveNotice, setSaveNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
 
-  const diagnosisCandidates = useMemo(() => {
-    if (!suggestion) return []
-    const candidates = []
-    if (suggestion.diseases.length > 0) candidates.push(`疾病：${suggestion.diseases.join('、')}`)
-    if (suggestion.syndromes.length > 0) candidates.push(`证型：${suggestion.syndromes.join('、')}`)
-    return candidates
-  }, [suggestion])
+  useEffect(() => {
+    setLocalDraft(draft)
+  }, [draft.consultationId, draft.updatedAt])
 
-  const formulaCandidates = useMemo(() => suggestion?.formulas ?? [], [suggestion])
+  useEffect(() => {
+    if (readOnly) return
+    if (!Array.isArray(suggestedSymptoms) || suggestedSymptoms.length === 0) return
+    const symptomsText = suggestedSymptoms.join('、')
+    setLocalDraft((prev) => {
+      if (prev.symptoms === symptomsText) return prev
+      return {
+        ...prev,
+        symptoms: symptomsText,
+        status: { ...prev.status, symptoms: 'suggested' },
+      }
+    })
+  }, [readOnly, suggestedSymptoms])
+
   const filteredPatients = useMemo(() => {
     const keyword = patientQuery.trim()
     if (!keyword) return patients
@@ -71,7 +83,7 @@ export function CaseBuilderPanel({
             >
               <span className="truncate">
                 {selectedPatient
-                  ? `${selectedPatient.name}（${[getPatientAge(selectedPatient) ? `${getPatientAge(selectedPatient)}岁` : null, selectedPatient.phone ?? '未留手机号'].filter(Boolean).join(' · ')}）`
+                  ? `${selectedPatient.name}${getPatientAge(selectedPatient) ? `（${getPatientAge(selectedPatient)}岁）` : ''}`
                   : '选择/新建患者'}
               </span>
               <span className="whitespace-nowrap text-xs text-slate-400">{patientPickerOpen ? '收起' : '展开'}</span>
@@ -112,7 +124,6 @@ export function CaseBuilderPanel({
                         <span className="font-semibold text-ink">{p.name}</span>
                         <span className="flex items-center gap-2 text-xs text-slate-500">
                           <span>{getPatientAge(p) ? `${getPatientAge(p)}岁` : ''}</span>
-                          <span>{p.phone ?? '未留手机号'}</span>
                         </span>
                       </button>
                     ))}
@@ -149,6 +160,7 @@ export function CaseBuilderPanel({
           status={localDraft.status.symptoms}
           rows={3}
           readOnly={readOnly}
+          hideStatus
           onChange={(value) =>
             setLocalDraft((prev) => ({
               ...prev,
@@ -163,7 +175,6 @@ export function CaseBuilderPanel({
           value={localDraft.diagnosis}
           status={localDraft.status.diagnosis}
           rows={3}
-          candidates={diagnosisCandidates}
           readOnly={readOnly}
           onPickCandidate={(value) =>
             setLocalDraft((prev) => ({
@@ -186,7 +197,6 @@ export function CaseBuilderPanel({
           value={localDraft.formulaName}
           status={localDraft.status.formulaName}
           rows={3}
-          candidates={formulaCandidates}
           readOnly={readOnly}
           onPickCandidate={(value) =>
             setLocalDraft((prev) => ({
@@ -222,11 +232,36 @@ export function CaseBuilderPanel({
       </div>
 
       {!readOnly ? (
-        <div className="mt-3 space-y-2">
+        <div className="relative mt-3 space-y-2">
+          {saveNotice ? (
+            <div className="pointer-events-none absolute -top-7 left-0 right-0 flex justify-center">
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  saveNotice.tone === 'success'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-rose-50 text-rose-600'
+                }`}
+              >
+                {saveNotice.message}
+              </span>
+            </div>
+          ) : null}
           <button
             type="button"
             disabled={!consultationId || saving}
-            onClick={() => void onSaveDraft(localDraft)}
+            onClick={async () => {
+              setSaveNotice(null)
+              try {
+                await onSaveDraft(localDraft)
+                setSaveNotice({ tone: 'success', message: '保存成功。' })
+              } catch (error) {
+                setSaveNotice({
+                  tone: 'error',
+                  message: error instanceof Error ? error.message : '保存失败。',
+                })
+              }
+              window.setTimeout(() => setSaveNotice(null), 2000)
+            }}
             className="w-full rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700 disabled:opacity-60"
           >
             保存

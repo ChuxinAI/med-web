@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useDoctorCases, useDoctorPatients } from '../../api/queries'
+import { useDeleteConsultation, useDoctorCases, useDoctorPatients } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { ConsultationWorkspaceModal } from '../../components/ConsultationWorkspaceModal'
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
+import { InlineNotice } from '../../components/InlineNotice'
 import { TablePagination } from '../../components/TablePagination'
 import { HorizontalScroll } from '../../components/HorizontalScroll'
 import { formatDateTime } from '../../lib/datetime'
@@ -13,12 +14,14 @@ export function ConsultationsPage() {
   const patientIdFilter = searchParams.get('patientId')
   const { data: cases } = useDoctorCases()
   const { data: patients } = useDoctorPatients()
+  const deleteConsultation = useDeleteConsultation()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<'all' | 'open' | 'in_review' | 'closed'>('all')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
 
   const filteredPatientName = useMemo(() => {
     if (!patientIdFilter) return null
@@ -31,6 +34,7 @@ export function ConsultationsPage() {
     return (cases ?? [])
       .filter((item) => {
         if (!patientIdFilter) return true
+        if (item.patientId) return item.patientId === patientIdFilter
         if (filteredPatientName && filteredPatientName !== patientIdFilter) {
           return item.patientName === filteredPatientName
         }
@@ -119,9 +123,6 @@ export function ConsultationsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-semibold text-ink">{item.patientName}</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {item.id} · {item.age} 岁 · {item.gender}
-                    </div>
                     <div className="mt-2 text-sm text-slate-700">
                       <span className="text-xs font-semibold text-slate-500">症状</span>
                       <div className="mt-1">{item.symptomsText ?? '-'}</div>
@@ -138,13 +139,35 @@ export function ConsultationsPage() {
                   </div>
                 </div>
                 <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setOpenId(item.id)}
-                    className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-emerald-700"
-                  >
-                    查看操作
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(item.id)}
+                      className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-emerald-700"
+                    >
+                      查看
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ok = window.confirm(`确认删除问诊记录（ID：${item.id}）？`)
+                        if (!ok) return
+                        try {
+                          await deleteConsultation.mutateAsync({ consultationId: item.id })
+                          setNotice({ tone: 'success', message: '问诊记录已删除。' })
+                          if (openId === item.id) setOpenId(null)
+                        } catch (error) {
+                          setNotice({
+                            tone: 'error',
+                            message: error instanceof Error ? error.message : '删除失败',
+                          })
+                        }
+                      }}
+                      className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-rose-700"
+                    >
+                      删除
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -159,13 +182,13 @@ export function ConsultationsPage() {
             <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
-                  <th className="w-[12%] px-4 py-3">问诊ID</th>
+                  <th className="w-[10%] px-4 py-3">问诊ID</th>
                   <th className="w-[14%] px-4 py-3">患者</th>
-                  <th className="w-[24%] px-4 py-3">症状</th>
-                  <th className="w-[22%] px-4 py-3">病症</th>
-                  <th className="w-[16%] px-4 py-3">方剂</th>
+                  <th className="w-[18%] px-4 py-3">症状</th>
+                  <th className="w-[16%] px-4 py-3">病症</th>
+                  <th className="w-[12%] px-4 py-3">方剂</th>
                   <th className="w-[12%] px-4 py-3">更新时间</th>
-                  <th className="w-[10%] px-4 py-3 text-center">操作</th>
+                  <th className="w-[16%] px-4 py-3 text-center">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -176,9 +199,6 @@ export function ConsultationsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-semibold text-ink">{item.patientName}</div>
-                      <div className="text-xs text-slate-500">
-                        {item.age} 岁 · {item.gender}
-                      </div>
                     </td>
                     <td className="truncate px-4 py-3 text-slate-700" title={item.symptomsText ?? ''}>
                       {item.symptomsText ?? '-'}
@@ -191,13 +211,35 @@ export function ConsultationsPage() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-700">{formatDateTime(item.updatedAt)}</td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => setOpenId(item.id)}
-                        className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
-                      >
-                        查看
-                      </button>
+                      <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => setOpenId(item.id)}
+                          className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-4 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
+                        >
+                          查看
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = window.confirm(`确认删除问诊记录（ID：${item.id}）？`)
+                            if (!ok) return
+                            try {
+                              await deleteConsultation.mutateAsync({ consultationId: item.id })
+                              setNotice({ tone: 'success', message: '问诊记录已删除。' })
+                              if (openId === item.id) setOpenId(null)
+                            } catch (error) {
+                              setNotice({
+                                tone: 'error',
+                                message: error instanceof Error ? error.message : '删除失败',
+                              })
+                            }
+                          }}
+                          className="inline-flex h-8 items-center justify-center rounded-lg bg-rose-600 px-4 text-xs font-semibold text-white shadow-soft-card hover:bg-rose-700"
+                        >
+                          删除
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -225,6 +267,12 @@ export function ConsultationsPage() {
           }}
         />
       </Card>
+
+      {notice ? (
+        <div className="mt-4">
+          <InlineNotice tone={notice.tone} message={notice.message} />
+        </div>
+      ) : null}
 
       <ConsultationWorkspaceModal
         open={Boolean(openId)}

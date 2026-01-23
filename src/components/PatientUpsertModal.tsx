@@ -27,7 +27,15 @@ export function PatientUpsertModal({
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
-  const canSubmit = useMemo(() => name.trim().length > 0 && !pending, [name, pending])
+  const canSubmit = useMemo(() => {
+    if (pending) return false
+    if (!name.trim()) return false
+    if (!gender) return false
+    if (!age.trim()) return false
+    if (!region.trim()) return false
+    if (!phone.trim()) return false
+    return true
+  }, [age, gender, name, pending, phone, region])
 
   if (!open) return null
   if (variant === 'portal' && typeof document === 'undefined') return null
@@ -37,6 +45,22 @@ export function PatientUpsertModal({
     const trimmed = name.trim()
     if (!trimmed) {
       setError('请输入患者姓名。')
+      return
+    }
+    if (!gender) {
+      setError('请选择患者性别。')
+      return
+    }
+    if (!age.trim()) {
+      setError('请输入患者年龄。')
+      return
+    }
+    if (!region.trim()) {
+      setError('请选择患者地区。')
+      return
+    }
+    if (!phone.trim()) {
+      setError('请输入患者电话。')
       return
     }
 
@@ -93,7 +117,9 @@ export function PatientUpsertModal({
         <div className="max-h-[70vh] overflow-y-auto p-5">
           <div className="grid grid-cols-1 gap-4 text-sm text-slate-700 sm:grid-cols-2">
             <label className="col-span-2 space-y-2">
-              <span className="text-xs font-semibold text-slate-600">姓名</span>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+                姓名 <span className="text-rose-500">*</span>
+              </span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -101,7 +127,9 @@ export function PatientUpsertModal({
               />
             </label>
             <label className="space-y-2">
-              <span className="text-xs font-semibold text-slate-600">性别</span>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+                性别 <span className="text-rose-500">*</span>
+              </span>
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value as Patient['gender'] | '')}
@@ -113,7 +141,9 @@ export function PatientUpsertModal({
               </select>
             </label>
             <label className="space-y-2">
-              <span className="text-xs font-semibold text-slate-600">年龄</span>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+                年龄 <span className="text-rose-500">*</span>
+              </span>
               <input
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
@@ -131,11 +161,15 @@ export function PatientUpsertModal({
               />
             </label>
             <label className="space-y-2">
-              <span className="text-xs font-semibold text-slate-600">地区</span>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+                地区 <span className="text-rose-500">*</span>
+              </span>
               <RegionSelect value={region} onChange={setRegion} />
             </label>
             <label className="space-y-2">
-              <span className="text-xs font-semibold text-slate-600">电话</span>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+                电话 <span className="text-rose-500">*</span>
+              </span>
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}

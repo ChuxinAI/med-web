@@ -38,12 +38,18 @@ export function ConsultationWorkspaceModal({
   const { data: draft } = useConsultationDraft(consultationId ?? undefined)
   const updateDraft = useUpdateConsultationDraft()
   const sendMessage = useSendConsultationMessage()
+  const suggestedSymptoms = useMemo(() => suggestion?.confirmedSymptoms ?? [], [suggestion?.confirmedSymptoms])
 
   const [input, setInput] = useState('')
   const [pending, setPending] = useState(false)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   const canSend = useMemo(() => input.trim().length > 0 && !pending, [input, pending])
+  const transcript = useMemo(() => {
+    return (messages ?? [])
+      .slice()
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+  }, [messages])
 
   useEffect(() => {
     if (!open) return
@@ -94,9 +100,9 @@ export function ConsultationWorkspaceModal({
                 <div className="relative">
                   <div className="flex w-full max-w-3xl flex-col gap-4 lg:mx-auto">
 	                    <CaseChatBubble key="guide" message={consultationGuideMessage} onOpenCitation={(c) => setSelectedCitation(c)} />
-	                    {(messages ?? []).map((m) => (
-	                      <CaseChatBubble key={m.id} message={m} onOpenCitation={(c) => setSelectedCitation(c)} />
-	                    ))}
+                    {transcript.map((m) => (
+                      <CaseChatBubble key={m.id} message={m} onOpenCitation={(c) => setSelectedCitation(c)} />
+                    ))}
                     {pending ? (
                       <div className="flex justify-start">
                         <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
@@ -152,6 +158,7 @@ export function ConsultationWorkspaceModal({
                   draft={draft}
                   patients={patients ?? []}
                   suggestion={suggestion}
+                  suggestedSymptoms={suggestedSymptoms}
                   saving={updateDraft.isPending}
                   readOnly={readOnly}
                   onCreatePatient={(input) => createPatient.mutateAsync(input)}

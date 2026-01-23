@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCreateDisease, useDiseases, useImportDiseases, useUpdateDisease } from '../../api/queries'
+import { useCreateDisease, useDeleteDisease, useDiseases, useImportDiseases, useUpdateDisease } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
 import { DiseaseEditModal } from '../../components/DiseaseEditModal'
-import { HorizontalScroll } from '../../components/HorizontalScroll'
 import { InlineNotice } from '../../components/InlineNotice'
 import { TablePagination } from '../../components/TablePagination'
 import type { Disease } from '../../types'
@@ -13,6 +12,7 @@ export function CatalogPage() {
   const { data: diseases } = useDiseases()
   const createDisease = useCreateDisease()
   const updateDisease = useUpdateDisease()
+  const deleteDisease = useDeleteDisease()
   const importDiseases = useImportDiseases()
 
   const [q, setQ] = useState('')
@@ -22,15 +22,75 @@ export function CatalogPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<Disease | null>(null)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
+  const [importDetails, setImportDetails] = useState<Record<string, unknown>[] | null>(null)
   const [importing, setImporting] = useState(false)
+  const [category, setCategory] = useState('')
   const fileInputId = 'disease-batch-import'
+
+  const formatSkippedRow = (row: Record<string, unknown>) => {
+    const keyMap: Record<string, string> = {
+      name: '病症名',
+      disease: '病症名',
+      disease_name: '病症名',
+      type_name: '类型名称',
+      typename: '类型名称',
+      type_code: '类型编码',
+      type: '类型',
+      symptoms: '症状描述',
+      symptom: '症状描述',
+      differentiation: '鉴别方法',
+      formula: '方剂',
+      note: '备注',
+      notes: '备注',
+      reason: '原因',
+      error: '错误',
+      row: '行号',
+      row_number: '行号',
+      row_index: '行号',
+      line: '行号',
+    }
+    return Object.entries(row).map(([key, value]) => {
+      const label = keyMap[key] ?? key
+      const text = value == null ? '' : String(value)
+      return `${label}：${text}`
+    })
+  }
+
+  const categoryOptions = [
+    { value: 'disease', label: '疾病' },
+    { value: 'syndrome', label: '症候' },
+    { value: 'symptom', label: '症状' },
+  ]
+  const typeLabelMap = useMemo(() => {
+    const base = categoryOptions.reduce<Record<string, string>>((acc, item) => {
+      acc[item.value] = item.label
+      return acc
+    }, {})
+    return {
+      ...base,
+      '1': '疾病',
+      '2': '症候',
+      '3': '症状',
+    }
+  }, [])
+  const getTypeLabel = (value: string) => typeLabelMap[value] ?? value
 
   const filtered = useMemo(() => {
     const keyword = q.trim()
     return (diseases ?? [])
       .filter((item) => {
+        if (category && item.typeCode !== category) return false
         if (!keyword) return true
-        return [item.id, item.name, item.symptoms, item.formula, item.note]
+        return [
+          item.id,
+          item.name,
+          item.typeName,
+          item.typeCode,
+          item.symptoms,
+          item.differentiation,
+          item.formula,
+          item.note,
+        ]
           .filter(Boolean)
           .join(' ')
           .includes(keyword)
@@ -50,19 +110,35 @@ export function CatalogPage() {
   )
 
   return (
-    <Card
-      title="病症管理"
-      action={
-        <div className="flex flex-wrap items-center gap-2">
+    <>
+      <Card
+        title="病症管理"
+        action={
+          <div className="flex flex-wrap items-center gap-2">
           <input
             value={q}
             onChange={(e) => {
               setQ(e.target.value)
               setPage(1)
             }}
-            placeholder="检索：病症/症状/方剂/备注/ID"
+            placeholder="检索：名称/类型/症状/鉴别/方剂/备注/ID"
             className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-72"
           />
+          <select
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value)
+              setPage(1)
+            }}
+            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-40"
+          >
+            <option value="">全部类别</option>
+            {categoryOptions.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
           <CreatedAtSortToggle
             order={order}
             onToggle={() => {
@@ -87,11 +163,13 @@ export function CatalogPage() {
                   tone: 'success',
                   message: `已导入 ${result.imported} 条，跳过 ${result.skipped} 条。`,
                 })
+                setImportDetails(result.skippedRows.length > 0 ? result.skippedRows : null)
               } catch (error) {
                 setNotice({
                   tone: 'error',
                   message: error instanceof Error ? error.message : '导入失败',
                 })
+                setImportDetails(null)
               } finally {
                 setImporting(false)
                 e.currentTarget.value = ''
@@ -122,8 +200,6 @@ export function CatalogPage() {
         </div>
       }
     >
-      {notice ? <InlineNotice tone={notice.tone} message={notice.message} /> : null}
-
       <div className="rounded-2xl border border-slate-100 bg-white/70 lg:hidden">
         <div className="divide-y divide-slate-100">
           {pageItems.map((item) => (
@@ -133,12 +209,22 @@ export function CatalogPage() {
                   <div className="font-semibold text-ink">{item.name}</div>
                   <div className="mt-1 text-xs text-slate-500">{item.id}</div>
                   <div className="mt-2 text-sm text-slate-700">
-                    <span className="text-xs font-semibold text-slate-500">症状/诊断</span>
+                    <span className="text-xs font-semibold text-slate-500">类型</span>
+                    <div className="mt-1 line-clamp-2">
+                      {[item.typeName, getTypeLabel(item.typeCode)].filter(Boolean).join(' / ') || '—'}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-sm text-slate-700">
+                    <span className="text-xs font-semibold text-slate-500">症状描述</span>
                     <div className="mt-1 line-clamp-2">{item.symptoms || '—'}</div>
                   </div>
                   <div className="mt-2 text-sm text-slate-700">
+                    <span className="text-xs font-semibold text-slate-500">鉴别方法</span>
+                    <div className="mt-1 line-clamp-2">{item.differentiation || '—'}</div>
+                  </div>
+                  <div className="mt-2 text-sm text-slate-700">
                     <span className="text-xs font-semibold text-slate-500">方剂</span>
-                    <div className="mt-1">{item.formula || '—'}</div>
+                    <div className="mt-1 line-clamp-2">{item.formula || '—'}</div>
                   </div>
                 </div>
               </div>
@@ -156,6 +242,25 @@ export function CatalogPage() {
                 >
                   查看问诊
                 </Link>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = window.confirm(`确认删除病症“${item.name}”？`)
+                    if (!ok) return
+                    try {
+                      await deleteDisease.mutateAsync({ diseaseId: item.id })
+                      setNotice({ tone: 'success', message: '病症已删除。' })
+                    } catch (error) {
+                      setNotice({
+                        tone: 'error',
+                        message: error instanceof Error ? error.message : '删除失败',
+                      })
+                    }
+                  }}
+                  className="inline-flex h-9 items-center justify-center rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-rose-700"
+                >
+                  删除
+                </button>
               </div>
             </div>
           ))}
@@ -166,16 +271,15 @@ export function CatalogPage() {
       </div>
 
       <div className="hidden lg:block">
-        <HorizontalScroll className="touch-pan-x overscroll-x-contain rounded-2xl border border-slate-100 bg-white/70">
-          <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
+        <div className="rounded-2xl border border-slate-100 bg-white/70">
+          <table className="w-full table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
-                <th className="w-[8%] px-4 py-3">ID</th>
-                <th className="w-[16%] px-4 py-3">病症名</th>
-                <th className="w-[30%] px-4 py-3">症状/诊断方法</th>
-                <th className="w-[18%] px-4 py-3">方剂</th>
-                <th className="w-[14%] px-4 py-3">备注</th>
-                <th className="w-[14%] px-4 py-3 text-center">操作</th>
+                <th className="w-[10%] px-4 py-3">ID</th>
+                <th className="w-[15%] px-4 py-3">类型</th>
+                <th className="w-[25%] px-4 py-3">类型名称</th>
+                <th className="w-[30%] px-4 py-3">名称</th>
+                <th className="w-[20%] px-4 py-3 text-center">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -184,15 +288,14 @@ export function CatalogPage() {
                   <td className="truncate px-4 py-3 font-semibold text-ink" title={item.id}>
                     {item.id}
                   </td>
-                  <td className="px-4 py-3 text-slate-700">{item.name}</td>
-                  <td className="truncate px-4 py-3 text-slate-700" title={item.symptoms}>
-                    {item.symptoms || '-'}
+                  <td className="truncate px-4 py-3 text-slate-700" title={item.typeCode}>
+                    {getTypeLabel(item.typeCode) || '-'}
                   </td>
-                  <td className="truncate px-4 py-3 text-slate-700" title={item.formula}>
-                    {item.formula || '-'}
+                  <td className="truncate px-4 py-3 text-slate-700" title={item.typeName}>
+                    {item.typeName || '-'}
                   </td>
-                  <td className="truncate px-4 py-3 text-slate-700" title={item.note ?? ''}>
-                    {item.note ?? '-'}
+                  <td className="truncate px-4 py-3 text-slate-700" title={item.name}>
+                    {item.name}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
@@ -209,20 +312,39 @@ export function CatalogPage() {
                       >
                         查看问诊
                       </Link>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = window.confirm(`确认删除病症“${item.name}”？`)
+                          if (!ok) return
+                          try {
+                            await deleteDisease.mutateAsync({ diseaseId: item.id })
+                            setNotice({ tone: 'success', message: '病症已删除。' })
+                          } catch (error) {
+                            setNotice({
+                              tone: 'error',
+                              message: error instanceof Error ? error.message : '删除失败',
+                            })
+                          }
+                        }}
+                        className="inline-flex h-8 items-center justify-center rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-rose-700"
+                      >
+                        删除
+                      </button>
                     </div>
                   </td>
                 </tr>
               ))}
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
                     无匹配记录
                   </td>
                 </tr>
               ) : null}
             </tbody>
           </table>
-        </HorizontalScroll>
+        </div>
       </div>
 
       <TablePagination
@@ -236,6 +358,21 @@ export function CatalogPage() {
           setPage(1)
         }}
       />
+
+      {importDetails ? (
+        <div className="mt-3 rounded-2xl border border-slate-100 bg-white/70 p-4 text-xs text-slate-600">
+          <p className="font-semibold text-slate-700">跳过明细</p>
+          <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-3 font-mono text-[11px]">
+            {importDetails.map((row, index) => (
+              <div key={`${index}-${JSON.stringify(row)}`} className="py-1">
+                {formatSkippedRow(row).map((line, lineIndex) => (
+                  <div key={`${index}-${lineIndex}`}>{line}</div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <DiseaseEditModal
         open={createOpen}
@@ -258,6 +395,13 @@ export function CatalogPage() {
           setNotice({ tone: 'success', message: '病症已更新。' })
         }}
       />
-    </Card>
+      </Card>
+
+      {notice ? (
+        <div className="mt-4">
+          <InlineNotice tone={notice.tone} message={notice.message} />
+        </div>
+      ) : null}
+    </>
   )
 }

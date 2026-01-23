@@ -3,6 +3,32 @@ export type CaseStatus = 'open' | 'in_review' | 'closed'
 export type MessageSender = 'doctor' | 'system' | 'model' | 'patientinfo'
 export type SuggestionSource = 'knowledge-base' | 'model'
 
+export interface ConsultationCandidateDisease {
+  id: string
+  name: string
+  typeName?: string
+  typeCode?: string
+  probability: number
+  score?: number
+  matchedSymptoms?: string[]
+}
+
+export interface ConsultationDecision {
+  diseaseName: string
+  prescription: string
+  confidence?: number | null
+}
+
+export interface ConsultationDialogue {
+  reply: string
+  confirmedSymptoms: string[]
+  extractedSymptoms: string[]
+  candidateDiseases: ConsultationCandidateDisease[]
+  followupQuestions: string[]
+  decision?: ConsultationDecision | null
+  fallbackByModel?: boolean
+}
+
 export interface PatientDemographics {
   name: string
   gender: '男' | '女'
@@ -18,6 +44,7 @@ export interface PatientDemographics {
 export interface CaseSummary {
   id: string
   patientName: string
+  patientId?: string
   gender: PatientDemographics['gender']
   age: number
   status: CaseStatus
@@ -50,6 +77,7 @@ export interface CaseMessage {
   createdAt: string
   source?: SuggestionSource
   citations?: Citation[]
+  isStreaming?: boolean
 }
 
 export interface ConsultationSuggestion {
@@ -60,16 +88,23 @@ export interface ConsultationSuggestion {
   formulas: string[]
   followUps: string[]
   rationale: string
+  candidateDiseases?: ConsultationCandidateDisease[]
+  confirmedSymptoms?: string[]
+  extractedSymptoms?: string[]
+  decision?: ConsultationDecision | null
+  fallbackByModel?: boolean
 }
 
 export interface UserSummary {
   id: string
   name: string
   username?: string
-  realName?: string
   role: UserRole
   status: 'active' | 'suspended'
   org?: string
+  province?: string
+  city?: string
+  county?: string
   region?: string
   phone?: string
   email?: string
@@ -93,20 +128,14 @@ export interface CatalogEntry {
 export interface Disease {
   id: string
   name: string
+  typeName: string
+  typeCode: string
   symptoms: string
+  differentiation: string
   formula: string
   note?: string
   createdAt: string
   updatedAt: string
-}
-
-export interface AuditLogEntry {
-  id: string
-  actor: string
-  action: string
-  target: string
-  createdAt: string
-  severity: 'info' | 'warning'
 }
 
 export interface Patient {
@@ -124,18 +153,6 @@ export interface Patient {
   updatedAt: string
 }
 
-export interface MedicalCaseSummary {
-  id: string
-  doctorName?: string
-  patientId: string
-  patientName: string
-  diagnosis: string
-  formulaName: string
-  consultationId?: string
-  updatedAt: string
-  createdAt: string
-}
-
 export interface AdminStats {
   doctorConsultations: { doctorName: string; count: number }[]
   syndromeConsultations: { syndrome: string; count: number }[]
@@ -143,42 +160,17 @@ export interface AdminStats {
   doctorCityCounts: { city: string; count: number }[]
 }
 
-export interface MedicalCaseDetails extends MedicalCaseSummary {
-  symptoms: string
-  formulaDetail: string
-  usageNote: string
-  note?: string
-}
 
 export interface Citation {
-  fileId: string
-  fileName: string
-  page: number
+  diseaseId?: string
+  diseaseName?: string
+  fileId?: string
+  fileName?: string
+  page?: number
   fileType?: 'pdf' | 'doc' | 'docx' | 'other'
   viewUrl?: string
 }
 
-export interface KnowledgeFile {
-  id: string
-  fileName: string
-  fileType: 'pdf' | 'doc' | 'docx' | 'other'
-  fileSize: number
-  status: 'processing' | 'ready' | 'failed'
-  createdAt: string
-  updatedAt: string
-  viewUrl?: string
-}
-
-export interface KnowledgeSearchHit {
-  id: string
-  fileId: string
-  fileName: string
-  fileType: KnowledgeFile['fileType']
-  page: number
-  snippet: string
-  score?: number
-  viewUrl?: string
-}
 
 export type DraftFieldStatus = 'empty' | 'suggested' | 'confirmed' | 'edited'
 

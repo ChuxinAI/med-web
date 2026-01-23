@@ -1,23 +1,28 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCreateDoctorPatient, useDoctorPatients } from '../../api/queries'
+import { useCreateDoctorPatient, useDeleteDoctorPatient, useDoctorPatients, useUpdateDoctorPatient } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
 import { InlineNotice } from '../../components/InlineNotice'
+import { PatientEditModal } from '../../components/PatientEditModal'
 import { PatientUpsertModal } from '../../components/PatientUpsertModal'
 import { TablePagination } from '../../components/TablePagination'
 import { HorizontalScroll } from '../../components/HorizontalScroll'
 import { formatDateTime } from '../../lib/datetime'
 import { getPatientAge } from '../../lib/patient'
 import { getCityFromRegion } from '../../lib/region'
+import type { Patient } from '../../types'
 
 export function PatientsPage() {
   const { data: patients } = useDoctorPatients()
   const createPatient = useCreateDoctorPatient()
+  const updatePatient = useUpdateDoctorPatient()
+  const deletePatient = useDeleteDoctorPatient()
   const [q, setQ] = useState('')
   const [city, setCity] = useState('all')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
   const [createOpen, setCreateOpen] = useState(false)
+  const [editing, setEditing] = useState<Patient | null>(null)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -33,7 +38,7 @@ export function PatientsPage() {
       .filter((p) => (city === 'all' ? true : getCityFromRegion(p.region) === city))
       .filter((p) => {
         if (!keyword) return true
-        const haystack = [p.id, p.name, getCityFromRegion(p.region), p.phone, p.email].filter(Boolean).join(' ')
+        const haystack = [p.id, p.name, getCityFromRegion(p.region), p.phone].filter(Boolean).join(' ')
         return haystack.includes(keyword)
       })
       .sort((a, b) => {
@@ -51,17 +56,18 @@ export function PatientsPage() {
   )
 
   return (
-    <Card
-      title="患者管理"
-      action={
-        <div className="flex flex-wrap items-center gap-2">
+    <>
+      <Card
+        title="患者管理"
+        action={
+          <div className="flex flex-wrap items-center gap-2">
           <input
             value={q}
             onChange={(e) => {
               setQ(e.target.value)
               setPage(1)
             }}
-            placeholder="检索：姓名/电话/城市/邮箱/ID"
+            placeholder="检索：姓名/电话/城市/ID"
             className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-56"
           />
           <select
@@ -99,7 +105,6 @@ export function PatientsPage() {
         </div>
       }
     >
-      {notice ? <InlineNotice tone={notice.tone} message={notice.message} /> : null}
       <div className="rounded-2xl border border-slate-100 bg-white/70 lg:hidden">
         <div className="divide-y divide-slate-100">
           {pageItems.map((p) => (
@@ -115,26 +120,42 @@ export function PatientsPage() {
                     {getCityFromRegion(p.region) ? ` · ${getCityFromRegion(p.region)}` : ''}
                   </div>
                   <div className="mt-2 text-xs text-slate-500">更新：{formatDateTime(p.updatedAt)}</div>
-                  {p.phone || p.email ? (
-                    <div className="mt-1 text-xs text-slate-500">
-                      {[p.phone, p.email].filter(Boolean).join(' · ')}
-                    </div>
-                  ) : null}
+                  {p.phone ? <div className="mt-1 text-xs text-slate-500">{p.phone}</div> : null}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link
-                  to={`/doctor/patients/${p.id}`}
+                <button
+                  type="button"
+                  onClick={() => setEditing(p)}
                   className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-emerald-700"
                 >
                   编辑
-                </Link>
+                </button>
                 <Link
                   to={`/doctor/consultations?patientId=${encodeURIComponent(p.id)}`}
                   className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   问诊记录
                 </Link>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = window.confirm(`确认删除患者“${p.name}”？`)
+                    if (!ok) return
+                    try {
+                      await deletePatient.mutateAsync({ patientId: p.id })
+                      setNotice({ tone: 'success', message: '患者已删除。' })
+                    } catch (error) {
+                      setNotice({
+                        tone: 'error',
+                        message: error instanceof Error ? error.message : '删除失败',
+                      })
+                    }
+                  }}
+                  className="inline-flex h-9 items-center justify-center rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-rose-700"
+                >
+                  删除
+                </button>
               </div>
             </div>
           ))}
@@ -146,7 +167,7 @@ export function PatientsPage() {
 
       <div className="hidden lg:block">
         <HorizontalScroll className="touch-pan-x overscroll-x-contain rounded-2xl border border-slate-100 bg-white/70">
-          <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+          <table className="w-full min-w-[900px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th className="w-24 px-4 py-3">患者ID</th>
@@ -155,9 +176,8 @@ export function PatientsPage() {
                 <th className="w-20 px-4 py-3">年龄</th>
                 <th className="w-28 px-4 py-3">城市</th>
                 <th className="w-36 px-4 py-3">电话</th>
-                <th className="px-4 py-3">邮箱</th>
                 <th className="w-52 px-4 py-3">更新时间</th>
-                <th className="w-40 px-4 py-3 text-center">操作</th>
+                <th className="w-56 px-4 py-3 text-center">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -173,29 +193,48 @@ export function PatientsPage() {
                   <td className="px-4 py-3 text-slate-700">{getPatientAge(p) ?? ''}</td>
                   <td className="px-4 py-3 text-slate-700">{getCityFromRegion(p.region)}</td>
                   <td className="px-4 py-3 text-slate-700">{p.phone ?? '-'}</td>
-                  <td className="truncate px-4 py-3 text-slate-700">{p.email ?? '-'}</td>
                   <td className="px-4 py-3 text-slate-700">{formatDateTime(p.updatedAt)}</td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <Link
-                        to={`/doctor/patients/${p.id}`}
+                      <button
+                        type="button"
+                        onClick={() => setEditing(p)}
                         className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
                       >
                         编辑
-                      </Link>
+                      </button>
                       <Link
                         to={`/doctor/consultations?patientId=${encodeURIComponent(p.id)}`}
                         className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
                       >
                         问诊记录
                       </Link>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = window.confirm(`确认删除患者“${p.name}”？`)
+                          if (!ok) return
+                          try {
+                            await deletePatient.mutateAsync({ patientId: p.id })
+                            setNotice({ tone: 'success', message: '患者已删除。' })
+                          } catch (error) {
+                            setNotice({
+                              tone: 'error',
+                              message: error instanceof Error ? error.message : '删除失败',
+                            })
+                          }
+                        }}
+                        className="inline-flex h-8 items-center justify-center rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-rose-700"
+                      >
+                        删除
+                      </button>
                     </div>
                   </td>
                 </tr>
               ))}
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
                     无匹配记录
                   </td>
                 </tr>
@@ -226,6 +265,22 @@ export function PatientsPage() {
           setNotice({ tone: 'success', message: '患者已创建。' })
         }}
       />
-    </Card>
+      <PatientEditModal
+        open={Boolean(editing)}
+        patient={editing}
+        onClose={() => setEditing(null)}
+        onSave={async ({ patientId, patch }) => {
+          await updatePatient.mutateAsync({ patientId, patch })
+          setNotice({ tone: 'success', message: '患者已更新。' })
+        }}
+      />
+      </Card>
+
+      {notice ? (
+        <div className="mt-4">
+          <InlineNotice tone={notice.tone} message={notice.message} />
+        </div>
+      ) : null}
+    </>
   )
 }

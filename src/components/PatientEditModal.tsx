@@ -77,13 +77,21 @@ function PatientEditForm({
   const canSave = useMemo(() => {
     if (pending) return false
     if (!editing.name.trim()) return false
+    if (!editing.gender) return false
+    if (!editing.age.trim()) return false
+    if (!editing.region.trim()) return false
+    if (!editing.phone.trim()) return false
     return true
-  }, [editing.name, pending])
+  }, [editing.age, editing.gender, editing.name, editing.phone, editing.region, pending])
 
   const submit = async () => {
     setError(null)
     setSuccess(null)
     if (!editing.name.trim()) return setError('请输入患者姓名。')
+    if (!editing.gender) return setError('请选择患者性别。')
+    if (!editing.age.trim()) return setError('请输入患者年龄。')
+    if (!editing.region.trim()) return setError('请选择患者地区。')
+    if (!editing.phone.trim()) return setError('请输入患者电话。')
     const ageNumber = editing.age.trim() ? Number(editing.age.trim()) : undefined
     if (editing.age.trim() && Number.isNaN(ageNumber)) return setError('年龄格式不正确。')
     setPending(true)
@@ -123,7 +131,9 @@ function PatientEditForm({
             />
           </label>
           <label className="col-span-2 space-y-2">
-            <span className="text-xs font-semibold text-slate-600">姓名（必填）</span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+              姓名 <span className="text-rose-500">*</span>
+            </span>
             <input
               value={editing.name}
               onChange={(e) => setEditing((p) => ({ ...p, name: e.target.value }))}
@@ -131,7 +141,9 @@ function PatientEditForm({
             />
           </label>
           <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-600">性别</span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+              性别 <span className="text-rose-500">*</span>
+            </span>
             <select
               value={editing.gender}
               onChange={(e) => setEditing((p) => ({ ...p, gender: e.target.value }))}
@@ -143,7 +155,9 @@ function PatientEditForm({
             </select>
           </label>
           <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-600">年龄</span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+              年龄 <span className="text-rose-500">*</span>
+            </span>
             <input
               value={editing.age}
               onChange={(e) => setEditing((p) => ({ ...p, age: e.target.value }))}
@@ -161,14 +175,18 @@ function PatientEditForm({
             />
           </label>
           <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-600">地区</span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+              地区 <span className="text-rose-500">*</span>
+            </span>
             <RegionSelect
               value={editing.region}
               onChange={(region) => setEditing((p) => ({ ...p, region }))}
             />
           </label>
           <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-600">电话</span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+              电话 <span className="text-rose-500">*</span>
+            </span>
             <input
               value={editing.phone}
               onChange={(e) => setEditing((p) => ({ ...p, phone: e.target.value }))}

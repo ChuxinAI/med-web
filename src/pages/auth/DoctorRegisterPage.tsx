@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useLogin, useRegisterDoctor } from '../../api/queries'
+import { setAuthScope } from '../../api/http'
 import { RegionSelect } from '../../components/RegionSelect'
+import { parseRegionParts } from '../../lib/region'
 
 export function DoctorRegisterPage() {
   const navigate = useNavigate()
+  const login = useLogin()
+  const registerDoctor = useRegisterDoctor()
   const [form, setForm] = useState({
     username: '',
     name: '',
@@ -24,10 +29,47 @@ export function DoctorRegisterPage() {
     [form.confirmPassword, form.password],
   )
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.username.trim()) {
       setError('用户名为必填项')
+      return
+    }
+    if (!/^[A-Za-z0-9]+$/.test(form.username.trim())) {
+      setError('用户名仅支持英文与数字')
+      return
+    }
+    if (!form.name.trim()) {
+      setError('姓名为必填项')
+      return
+    }
+    if (!form.region.trim()) {
+      setError('地区为必填项')
+      return
+    }
+    const regionParts = parseRegionParts(form.region)
+    if (!regionParts.province || !regionParts.city || !regionParts.county) {
+      setError('请选择完整的省/市/区')
+      return
+    }
+    if (!form.organization.trim()) {
+      setError('医院/诊所为必填项')
+      return
+    }
+    if (!form.phone.trim()) {
+      setError('电话为必填项')
+      return
+    }
+    if (!form.password.trim()) {
+      setError('密码为必填项')
+      return
+    }
+    if (form.password.trim().length < 8) {
+      setError('密码至少 8 位')
+      return
+    }
+    if (!form.confirmPassword.trim()) {
+      setError('请再次确认密码')
       return
     }
     if (isPasswordMismatch) {
@@ -35,7 +77,23 @@ export function DoctorRegisterPage() {
       return
     }
     setError('')
-    navigate('/doctor/login')
+    try {
+      setAuthScope('doctor')
+      await registerDoctor.mutateAsync({
+        username: form.username.trim(),
+        phone: form.phone.trim() || undefined,
+        password: form.password,
+        name: form.name.trim(),
+        org: form.organization.trim(),
+        province: regionParts.province,
+        city: regionParts.city,
+        county: regionParts.county,
+      })
+      await login.mutateAsync({ identifier: form.username.trim(), password: form.password })
+      navigate('/doctor/chat')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '注册失败')
+    }
   }
 
   const updateField = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,17 +117,21 @@ export function DoctorRegisterPage() {
           </div>
           <form onSubmit={onSubmit} className="-mt-2 mx-auto w-full max-w-xs space-y-3">
             <label className="block space-y-2 text-sm font-medium text-slate-700">
-              <span>用户名 *</span>
+              <span className="inline-flex items-center gap-1">
+                用户名 <span className="text-rose-500">*</span>
+              </span>
               <input
                 value={form.username}
                 onChange={updateField('username')}
                 required
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                placeholder="请填写用户名"
+                placeholder="仅支持英文与数字"
               />
             </label>
             <label className="block space-y-2 text-sm font-medium text-slate-700">
-              <span>姓名</span>
+              <span className="inline-flex items-center gap-1">
+                姓名 <span className="text-rose-500">*</span>
+              </span>
               <input
                 value={form.name}
                 onChange={updateField('name')}
@@ -78,7 +140,9 @@ export function DoctorRegisterPage() {
               />
             </label>
             <label className="block space-y-2 text-sm font-medium text-slate-700">
-              <span>医院/诊所</span>
+              <span className="inline-flex items-center gap-1">
+                医院/诊所 <span className="text-rose-500">*</span>
+              </span>
               <input
                 value={form.organization}
                 onChange={updateField('organization')}
@@ -87,11 +151,15 @@ export function DoctorRegisterPage() {
               />
             </label>
             <label className="block space-y-2 text-sm font-medium text-slate-700">
-              <span>地区</span>
+              <span className="inline-flex items-center gap-1">
+                地区 <span className="text-rose-500">*</span>
+              </span>
               <RegionSelect value={form.region} onChange={(region) => setForm((prev) => ({ ...prev, region }))} />
             </label>
             <label className="block space-y-2 text-sm font-medium text-slate-700">
-              <span>电话</span>
+              <span className="inline-flex items-center gap-1">
+                电话 <span className="text-rose-500">*</span>
+              </span>
               <input
                 value={form.phone}
                 onChange={updateField('phone')}
@@ -100,17 +168,21 @@ export function DoctorRegisterPage() {
               />
             </label>
             <label className="block space-y-2 text-sm font-medium text-slate-700">
-              <span>密码</span>
+              <span className="inline-flex items-center gap-1">
+                密码 <span className="text-rose-500">*</span>
+              </span>
               <input
                 type="password"
                 value={form.password}
                 onChange={updateField('password')}
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                placeholder="••••••"
+                placeholder="至少 8 位"
               />
             </label>
             <label className="block space-y-2 text-sm font-medium text-slate-700">
-              <span>密码确认</span>
+              <span className="inline-flex items-center gap-1">
+                密码确认 <span className="text-rose-500">*</span>
+              </span>
               <input
                 type="password"
                 value={form.confirmPassword}
@@ -122,9 +194,10 @@ export function DoctorRegisterPage() {
             {error ? <p className="text-sm text-rose-600">{error}</p> : null}
             <button
               type="submit"
+              disabled={registerDoctor.isPending}
               className="w-full rounded-xl bg-primary-600 px-4 py-3 text-white shadow-soft-card transition hover:bg-primary-700 disabled:opacity-70"
             >
-              提交注册
+              {registerDoctor.isPending ? '提交中...' : '提交注册'}
             </button>
             <div className="text-center text-sm text-slate-500">
               已有账号？{' '}

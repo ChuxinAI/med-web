@@ -7,9 +7,10 @@ interface SidebarNavProps {
   userName?: string
   className?: string
   onNavigate?: () => void
+  onUserClick?: () => void
 }
 
-export function SidebarNav({ items, title, userName, className, onNavigate }: SidebarNavProps) {
+export function SidebarNav({ items, title, userName, className, onNavigate, onUserClick }: SidebarNavProps) {
   return (
     <nav className={clsx('flex h-full w-56 shrink-0 flex-col gap-5 bg-white/90 p-5 shadow-soft-card lg:h-screen', className)}>
       <div className="flex items-center gap-3">
@@ -55,10 +56,14 @@ export function SidebarNav({ items, title, userName, className, onNavigate }: Si
         ))}
       </div>
       {userName ? (
-        <div className="mt-auto flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-slate-700">
+        <button
+          type="button"
+          onClick={onUserClick}
+          className="mt-auto flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-left text-slate-700 transition hover:bg-slate-100"
+        >
           <span className="text-xs text-slate-500">当前用户</span>
           <span className="text-sm font-semibold text-ink">{userName}</span>
-        </div>
+        </button>
       ) : null}
     </nav>
   )

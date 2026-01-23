@@ -1,45 +1,70 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useChangeMyPassword, useCurrentUser, useUpdateCurrentUser } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { formatDateTime } from '../../lib/datetime'
 import { PasswordResetModal } from '../../components/PasswordResetModal'
 import { InlineNotice } from '../../components/InlineNotice'
 import { RegionSelect } from '../../components/RegionSelect'
+import { parseRegionParts } from '../../lib/region'
 
 export function AdminSettingsPage() {
-  const [profile, setProfile] = useState({
-    id: 'u1',
-    username: 'admin',
-    org: '总部',
-    realName: '系统管理员',
-    region: '上海市/上海市/黄浦区',
-    phone: '13800001000',
-    email: 'admin@example.com',
-    note: '拥有全局管理权限。',
-    registeredAt: '2024-03-01T00:00:00Z',
-    lastLoginAt: '2024-12-28T08:30:00Z',
-    registerIp: '10.0.0.2',
-    lastLoginIp: '10.0.0.19',
-  })
+  const { data: profile } = useCurrentUser('admin')
+  const updateProfile = useUpdateCurrentUser()
+  const changePassword = useChangeMyPassword()
 
   const [editing, setEditing] = useState({
-    org: profile.org,
-    realName: profile.realName,
-    region: profile.region,
-    phone: profile.phone,
-    email: profile.email,
-    note: profile.note,
+    name: '',
+    org: '',
+    region: '',
+    phone: '',
+    email: '',
+    note: '',
   })
 
   const [resetOpen, setResetOpen] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const onSaveProfile = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!profile) return
+    setEditing({
+      name: profile.name ?? '',
+      org: profile.org ?? '',
+      region: profile.region ?? '',
+      phone: profile.phone ?? '',
+      email: profile.email ?? '',
+      note: profile.note ?? '',
+    })
+  }, [profile])
+
+  const onSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     setMessage(null)
     setError(null)
-    setProfile((prev) => ({ ...prev, ...editing }))
-    setMessage('个人资料已保存（Mock）。')
+    try {
+      const regionParts = parseRegionParts(editing.region)
+      if (!regionParts.province || !regionParts.city || !regionParts.county) {
+        setError('请选择完整的省/市/区')
+        return
+      }
+      await updateProfile.mutateAsync({
+        name: editing.name.trim(),
+        org: editing.org.trim(),
+        province: regionParts.province || undefined,
+        city: regionParts.city || undefined,
+        county: regionParts.county || undefined,
+        phone: editing.phone.trim(),
+        email: editing.email.trim(),
+        note: editing.note.trim(),
+      })
+      setMessage('个人资料已保存。')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败')
+    }
+  }
+
+  if (!profile) {
+    return <div className="text-slate-600">正在加载个人信息...</div>
   }
 
   return (
@@ -68,58 +93,58 @@ export function AdminSettingsPage() {
             <label className="block space-y-2">
               <span className="text-sm font-medium text-slate-700">单位</span>
               <input
-                  value={editing.org}
-                  onChange={(e) => setEditing((prev) => ({ ...prev, org: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                />
-              </label>
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">姓名</span>
-                <input
-                  value={editing.realName}
-                  onChange={(e) => setEditing((prev) => ({ ...prev, realName: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                />
-              </label>
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">地区</span>
-                <RegionSelect value={editing.region} onChange={(region) => setEditing((prev) => ({ ...prev, region }))} />
-              </label>
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">电话</span>
-                <input
-                  value={editing.phone}
-                  onChange={(e) => setEditing((prev) => ({ ...prev, phone: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                />
-              </label>
-              <label className="block space-y-2 sm:col-span-2">
-                <span className="text-sm font-medium text-slate-700">邮箱</span>
-                <input
-                  value={editing.email}
-                  onChange={(e) => setEditing((prev) => ({ ...prev, email: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                />
-              </label>
-              <label className="block space-y-2 sm:col-span-2">
-                <span className="text-sm font-medium text-slate-700">备注</span>
-                <textarea
-                  value={editing.note}
-                  onChange={(e) => setEditing((prev) => ({ ...prev, note: e.target.value }))}
-                  rows={3}
-                  className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                />
-              </label>
-            </div>
+                value={editing.org}
+                onChange={(e) => setEditing((prev) => ({ ...prev, org: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              />
+            </label>
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700">姓名</span>
+              <input
+                value={editing.name}
+                onChange={(e) => setEditing((prev) => ({ ...prev, name: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              />
+            </label>
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700">地区</span>
+              <RegionSelect value={editing.region} onChange={(region) => setEditing((prev) => ({ ...prev, region }))} />
+            </label>
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700">电话</span>
+              <input
+                value={editing.phone}
+                onChange={(e) => setEditing((prev) => ({ ...prev, phone: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              />
+            </label>
+            <label className="block space-y-2 sm:col-span-2">
+              <span className="text-sm font-medium text-slate-700">邮箱</span>
+              <input
+                value={editing.email}
+                onChange={(e) => setEditing((prev) => ({ ...prev, email: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              />
+            </label>
+            <label className="block space-y-2 sm:col-span-2">
+              <span className="text-sm font-medium text-slate-700">备注</span>
+              <textarea
+                value={editing.note}
+                onChange={(e) => setEditing((prev) => ({ ...prev, note: e.target.value }))}
+                rows={3}
+                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              />
+            </label>
+          </div>
 
             <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-100 bg-white/70 p-4 text-xs text-slate-600 sm:grid-cols-2">
               <div>
                 <p className="text-slate-500">注册时间</p>
-                <p className="mt-1 font-semibold text-slate-800">{formatDateTime(profile.registeredAt)}</p>
+                <p className="mt-1 font-semibold text-slate-800">{formatDateTime(profile.registeredAt ?? 0)}</p>
               </div>
               <div>
                 <p className="text-slate-500">上一次登录时间</p>
-                <p className="mt-1 font-semibold text-slate-800">{formatDateTime(profile.lastLoginAt)}</p>
+                <p className="mt-1 font-semibold text-slate-800">{formatDateTime(profile.lastLoginAt ?? 0)}</p>
               </div>
               <div>
                 <p className="text-slate-500">注册IP</p>
@@ -155,7 +180,10 @@ export function AdminSettingsPage() {
       <PasswordResetModal
         open={resetOpen}
         onClose={() => setResetOpen(false)}
-        onSuccess={() => setMessage('密码已更新（Mock）。')}
+        onSuccess={() => setMessage('密码已更新。')}
+        onReset={(oldPassword, newPassword) =>
+          changePassword.mutateAsync({ oldPassword, newPassword })
+        }
       />
     </div>
   )

@@ -1,20 +1,32 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useLogin } from '../../api/queries'
+import { fetchCurrentUser } from '../../api/authApi'
+import { setAuthScope } from '../../api/http'
 
 export function DoctorLoginPage() {
   const navigate = useNavigate()
-  const [username, setUsername] = useState('李医生')
+  const login = useLogin()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     document.title = '大用问证医生端'
+    setAuthScope('doctor')
   }, [])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    void username
-    void password
-    navigate('/doctor/consultations')
+    setError(null)
+    try {
+      setAuthScope('doctor')
+      await login.mutateAsync({ identifier: username.trim(), password })
+      const me = await fetchCurrentUser('doctor')
+      navigate(me.role === 'admin' ? '/admin/users' : '/doctor/chat')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '登录失败')
+    }
   }
 
   return (
@@ -39,7 +51,7 @@ export function DoctorLoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                placeholder="由管理员分配"
+                placeholder="英文或数字"
               />
             </label>
             <label className="block space-y-2 text-sm font-medium text-slate-700">
@@ -54,10 +66,12 @@ export function DoctorLoginPage() {
             </label>
             <button
               type="submit"
+              disabled={login.isPending}
               className="w-full rounded-xl bg-primary-600 px-4 py-3 text-white shadow-soft-card transition hover:bg-primary-700 disabled:opacity-70"
             >
-              登录
+              {login.isPending ? '登录中...' : '登录'}
             </button>
+            {error ? <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{error}</p> : null}
             <div className="text-center text-sm">
               <Link
                 to="/doctor/register"

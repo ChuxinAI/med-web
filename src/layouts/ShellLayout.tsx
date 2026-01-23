@@ -1,7 +1,10 @@
 import { useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { SidebarNav } from '../components/SidebarNav'
+import { logout } from '../api/authApi'
+import { setAuthScope } from '../api/http'
 
 interface ShellLayoutProps {
   title: string
@@ -9,6 +12,8 @@ interface ShellLayoutProps {
   userName?: string
   documentTitle: string
   backgroundClassName: string
+  logoutTo: string
+  authScope: 'doctor' | 'admin'
   children: ReactNode
 }
 
@@ -18,14 +23,22 @@ export function ShellLayout({
   userName,
   documentTitle,
   backgroundClassName,
+  logoutTo,
+  authScope,
   children,
 }: ShellLayoutProps) {
   const [navOpen, setNavOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const dialogTitleId = useId()
+  const navigate = useNavigate()
 
   useEffect(() => {
     document.title = documentTitle
   }, [documentTitle])
+
+  useEffect(() => {
+    setAuthScope(authScope)
+  }, [authScope])
 
   useEffect(() => {
     if (!navOpen) return
@@ -46,8 +59,19 @@ export function ShellLayout({
 
   return (
     <div className={clsx('flex h-screen-dvh overflow-hidden', backgroundClassName)}>
+      <style>{`
+        @keyframes userMenuIn {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
       <div className="hidden lg:block">
-        <SidebarNav title={title} items={items} userName={userName} />
+        <SidebarNav
+          title={title}
+          items={items}
+          userName={userName}
+          onUserClick={userName ? () => setUserMenuOpen(true) : undefined}
+        />
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -125,11 +149,42 @@ export function ShellLayout({
             title={title}
             items={items}
             userName={userName}
+            onUserClick={userName ? () => setUserMenuOpen(true) : undefined}
             onNavigate={() => setNavOpen(false)}
             className="h-[calc(100%-65px)] w-full rounded-none border-0 bg-white/95 p-5 shadow-none"
           />
         </div>
       </div>
+
+      {userMenuOpen ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            onClick={() => setUserMenuOpen(false)}
+            className="absolute inset-0"
+            aria-label="关闭用户操作"
+          />
+          <div className="absolute bottom-20 left-6 w-40 translate-y-3 rounded-xl border border-slate-200 bg-white shadow-xl animate-[userMenuIn_0.16s_ease-out_forwards]">
+            <button
+              type="button"
+              onClick={async () => {
+                setAuthScope(authScope)
+                try {
+                  await logout()
+                } catch {
+                  // ignore logout errors
+                } finally {
+                  setUserMenuOpen(false)
+                  navigate(logoutTo, { replace: true })
+                }
+              }}
+              className="w-full px-4 py-3 text-sm font-semibold text-rose-600 hover:bg-rose-50"
+            >
+              登出
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

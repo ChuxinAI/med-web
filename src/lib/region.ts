@@ -12,3 +12,13 @@ export function getCityFromRegion(region?: string) {
   if (parts.length >= 2) return normalizeRegionName(parts[1])
   return ''
 }
+
+export function parseRegionParts(region?: string) {
+  if (!region) return { province: '', city: '', county: '' }
+  const parts = region.split('/').map((part) => part.trim()).filter(Boolean)
+  return {
+    province: parts[0] ?? '',
+    city: parts[1] ?? '',
+    county: parts[2] ?? '',
+  }
+}

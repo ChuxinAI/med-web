@@ -1,48 +1,101 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createConsultation,
+  createDisease,
   createDoctorPatient,
-  updateDoctorPatient,
-  fetchUsers,
-  resetAdminUserPassword,
-  setAdminUserStatus,
-  updateAdminUser,
-  deleteKnowledgeFile,
-  fetchAuditLogs,
+  createAdminUser,
+  deleteConsultation,
+  deleteDisease,
+  deleteDoctorPatient,
+  fetchAdminConsultations,
+  fetchAdminPatients,
+  fetchAdminStats,
   fetchCaseDetails,
   fetchCaseMessages,
-  fetchConsultationDraft,
   fetchCatalog,
+  fetchConsultationDraft,
   fetchDiseases,
   fetchDoctorCases,
   fetchDoctorPatients,
-  fetchKnowledgeFiles,
-  fetchMedicalCaseDetails,
-  fetchMedicalCases,
   fetchPatientDetails,
-  searchKnowledge,
   fetchSuggestions,
-  login,
-  createMedicalCaseFromConsultation,
-  sendConsultationMessage,
-  updateConsultationDraft,
-  updateMedicalCase,
-  uploadKnowledgeFiles,
-  createDisease,
-  updateDisease,
+  fetchUsers,
   importDiseasesFromFile,
-  fetchAdminStats,
-} from './mockApi'
+  resetAdminUserPassword,
+  sendConsultationDialogue,
+  sendConsultationMessage,
+  setAdminUserStatus,
+  updateAdminUser,
+  updateConsultationDraft,
+  updateDisease,
+  updateDoctorPatient,
+} from './backendApi'
+import {
+  changeMyPassword,
+  fetchCurrentUser,
+  loginWithCredentials,
+  registerDoctor,
+  updateCurrentUser,
+} from './authApi'
+import { getAccessToken } from './http'
+import { toConsultationSuggestion } from './backendMappers'
+import type { ConsultationSuggestionDto } from './backendTypes'
 
-export const useLogin = (username?: string, password?: string) =>
-  useQuery({
-    queryKey: ['login', username],
-    queryFn: () => login(username ?? '', password ?? ''),
-    enabled: false,
+export const useLogin = () =>
+  useMutation({
+    mutationFn: (args: { identifier: string; password: string }) =>
+      loginWithCredentials(args.identifier, args.password),
+  })
+
+export const useCurrentUser = (scope?: 'doctor' | 'admin') => {
+  const token = scope ? getAccessToken(scope) : getAccessToken()
+  return useQuery({
+    queryKey: ['auth', 'me', scope],
+    queryFn: () => fetchCurrentUser(scope),
+    enabled: Boolean(token),
+  })
+}
+
+export const useUpdateCurrentUser = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: Parameters<typeof updateCurrentUser>[0]) =>
+      updateCurrentUser(patch),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] })
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
+  })
+}
+
+export const useChangeMyPassword = () =>
+  useMutation({
+    mutationFn: (args: { oldPassword: string; newPassword: string }) =>
+      changeMyPassword(args.oldPassword, args.newPassword),
+  })
+
+export const useRegisterDoctor = () =>
+  useMutation({
+    mutationFn: (args: { username: string; phone?: string; email?: string; password: string }) =>
+      registerDoctor(args),
   })
 
 export const useDoctorCases = () =>
   useQuery({ queryKey: ['cases'], queryFn: fetchDoctorCases })
+
+export const useDeleteConsultation = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { consultationId: string }) => deleteConsultation(args.consultationId),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['cases'] })
+      await queryClient.invalidateQueries({ queryKey: ['case', variables.consultationId] })
+      await queryClient.invalidateQueries({ queryKey: ['case', variables.consultationId, 'messages'] })
+      await queryClient.invalidateQueries({ queryKey: ['case', variables.consultationId, 'suggestions'] })
+      await queryClient.invalidateQueries({ queryKey: ['consultation', variables.consultationId, 'draft'] })
+    },
+  })
+}
 
 export const useCaseDetails = (caseId?: string) =>
   useQuery({
@@ -68,8 +121,24 @@ export const useCaseSuggestions = (caseId?: string) =>
 export const useAdminUsers = () =>
   useQuery({ queryKey: ['admin', 'users'], queryFn: fetchUsers })
 
+export const useCreateAdminUser = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: Parameters<typeof createAdminUser>[0]) => createAdminUser(args),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
+  })
+}
+
 export const useAdminStats = () =>
   useQuery({ queryKey: ['admin', 'stats'], queryFn: fetchAdminStats })
+
+export const useAdminConsultations = () =>
+  useQuery({ queryKey: ['admin', 'consultations'], queryFn: fetchAdminConsultations })
+
+export const useAdminPatients = () =>
+  useQuery({ queryKey: ['admin', 'patients'], queryFn: fetchAdminPatients })
 
 export const useUpdateAdminUser = () => {
   const queryClient = useQueryClient()
@@ -112,6 +181,16 @@ export const useCreateDisease = () => {
   })
 }
 
+export const useDeleteDisease = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { diseaseId: string }) => deleteDisease(args.diseaseId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'] })
+    },
+  })
+}
+
 export const useUpdateDisease = () => {
   const queryClient = useQueryClient()
   return useMutation({
@@ -133,41 +212,18 @@ export const useImportDiseases = () => {
   })
 }
 
-export const useAuditLogs = () =>
-  useQuery({ queryKey: ['audits'], queryFn: fetchAuditLogs })
-
-export const useKnowledgeFiles = () =>
-  useQuery({ queryKey: ['admin', 'knowledge', 'files'], queryFn: fetchKnowledgeFiles })
-
-export const useDeleteKnowledgeFile = () => {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (args: { fileId: string }) => deleteKnowledgeFile(args.fileId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'knowledge', 'files'] })
-    },
-  })
-}
-
-export const useUploadKnowledgeFiles = () => {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (args: { files: { name: string; size: number }[] }) => uploadKnowledgeFiles(args.files),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'knowledge', 'files'] })
-    },
-  })
-}
-
-export const useSearchKnowledge = (query: string) =>
-  useQuery({
-    queryKey: ['admin', 'knowledge', 'search', query],
-    queryFn: () => searchKnowledge(query),
-    enabled: query.trim().length > 0,
-  })
-
 export const useDoctorPatients = () =>
   useQuery({ queryKey: ['doctor', 'patients'], queryFn: fetchDoctorPatients })
+
+export const useDeleteDoctorPatient = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { patientId: string }) => deleteDoctorPatient(args.patientId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['doctor', 'patients'] })
+    },
+  })
+}
 
 export const useCreateDoctorPatient = () => {
   const queryClient = useQueryClient()
@@ -187,6 +243,7 @@ export const useUpdateDoctorPatient = () => {
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: ['doctor', 'patients'] })
       await queryClient.invalidateQueries({ queryKey: ['doctor', 'patients', variables.patientId] })
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] })
     },
   })
 }
@@ -197,31 +254,6 @@ export const usePatientDetails = (patientId?: string) =>
     queryFn: () => fetchPatientDetails(patientId ?? ''),
     enabled: Boolean(patientId),
   })
-
-export const useMedicalCases = () =>
-  useQuery({ queryKey: ['doctor', 'medicalCases'], queryFn: fetchMedicalCases })
-
-export const useMedicalCaseDetails = (caseId?: string) =>
-  useQuery({
-    queryKey: ['doctor', 'medicalCases', caseId],
-    queryFn: () => fetchMedicalCaseDetails(caseId ?? ''),
-    enabled: Boolean(caseId),
-  })
-
-export const useUpdateMedicalCase = () => {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (args: {
-      caseId: string
-      patch: Parameters<typeof updateMedicalCase>[1]
-    }) => updateMedicalCase(args.caseId, args.patch),
-    onSuccess: async (_data, variables) => {
-      const { caseId } = variables
-      await queryClient.invalidateQueries({ queryKey: ['doctor', 'medicalCases'] })
-      await queryClient.invalidateQueries({ queryKey: ['doctor', 'medicalCases', caseId] })
-    },
-  })
-}
 
 export const useConsultationDraft = (consultationId?: string) =>
   useQuery({
@@ -248,23 +280,65 @@ export const useUpdateConsultationDraft = () => {
 export const useSendConsultationMessage = () => {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (args: { consultationId: string; content: string }) =>
-      sendConsultationMessage(args.consultationId, args.content),
+    mutationFn: (args: {
+      consultationId: string
+      content: string
+      onDelta?: (delta: string, payload?: unknown) => void
+      onDone?: (payload?: unknown) => void
+      onError?: (error: Error) => void
+    }) =>
+      sendConsultationMessage(args.consultationId, args.content, {
+        onDelta: args.onDelta,
+        onDone: (payload) => {
+          args.onDone?.(payload)
+          if (!payload || typeof payload !== 'object') return
+          const raw = payload as ConsultationSuggestionDto
+          if (
+            !('candidate_diseases' in raw) &&
+            !('assistant_message' in raw) &&
+            !('confirmed_symptoms' in raw)
+          ) {
+            return
+          }
+          const candidateCount = Array.isArray(raw.candidate_diseases) ? raw.candidate_diseases.length : 0
+          if (candidateCount === 0) return
+          const suggestion = toConsultationSuggestion(raw)
+          if (suggestion) {
+            queryClient.setQueryData(['case', args.consultationId, 'suggestions'], suggestion)
+          }
+        },
+        onError: args.onError,
+      }),
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({
         queryKey: ['case', variables.consultationId, 'messages'],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['case', variables.consultationId, 'suggestions'],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['consultation', variables.consultationId, 'draft'],
       })
     },
   })
 }
 
-export const useCreateMedicalCaseFromConsultation = () => {
+export const useConsultationDialogue = () => {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (args: { consultationId: string }) =>
-      createMedicalCaseFromConsultation(args.consultationId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['doctor', 'medicalCases'] })
+    mutationFn: (args: {
+      consultationId: string
+      message?: string | null
+      mode?: 'guided' | 'model_decision'
+      topK?: number
+    }) => sendConsultationDialogue(args),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['case', variables.consultationId, 'suggestions'],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['consultation', variables.consultationId, 'draft'],
+      })
     },
   })
 }

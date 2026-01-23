@@ -1,24 +1,29 @@
 import type { CaseMessage, Citation } from '../types'
 import { formatDateTime } from '../lib/datetime'
+import { isMarkdownStable, splitMarkdownStable } from '../lib/consultationStream'
+import { RichText } from './RichText'
 
 export function CaseChatBubble({
   message,
   onOpenCitation,
+  hideTimestamp,
+  footer,
 }: {
   message: CaseMessage
   onOpenCitation: (citation: Citation) => void
+  hideTimestamp?: boolean
+  footer?: React.ReactNode
 }) {
   const isUser = message.sender === 'doctor'
-  const showHeader = !isUser && message.sender !== 'system'
+  const showHeader = !isUser && message.sender !== 'system' && message.sender !== 'model'
   const label =
     message.sender === 'doctor'
       ? '医生'
-      : message.sender === 'model'
-        ? '模型'
-        : message.sender === 'patientinfo'
-          ? '患者信息'
-          : ''
+      : message.sender === 'patientinfo'
+        ? '患者信息'
+        : ''
   const tone = isUser ? 'bg-primary-600 text-white' : 'bg-white text-slate-700 border border-slate-100'
+  const markdownSplit = message.isStreaming ? splitMarkdownStable(message.content) : null
 
   return (
     <div className={isUser ? 'flex justify-end' : 'flex justify-start'}>
@@ -34,7 +39,16 @@ export function CaseChatBubble({
           </div>
         ) : null}
 
-        <div className="whitespace-pre-wrap leading-relaxed">{message.content}</div>
+        {message.isStreaming && !isMarkdownStable(message.content) && markdownSplit ? (
+          <div className="leading-relaxed">
+            {markdownSplit.stable ? <RichText content={markdownSplit.stable} className="rich-text" /> : null}
+            {markdownSplit.unstable ? <div className="whitespace-pre-wrap">{markdownSplit.unstable}</div> : null}
+          </div>
+        ) : (
+          <RichText content={message.content} className="rich-text leading-relaxed" />
+        )}
+
+        {footer ? <div className="mt-2">{footer}</div> : null}
 
         {message.citations && message.citations.length > 0 ? (
           <div className={isUser ? 'mt-3 text-white/90' : 'mt-3 text-slate-600'}>
@@ -42,9 +56,9 @@ export function CaseChatBubble({
               引用来源
             </p>
             <div className="mt-1 flex flex-wrap gap-2">
-              {message.citations.map((c) => (
+              {message.citations.map((c, idx) => (
                 <button
-                  key={`${c.fileId}-${c.page}`}
+                  key={`${c.diseaseId ?? c.diseaseName ?? 'citation'}-${idx}`}
                   type="button"
                   onClick={() => onOpenCitation(c)}
                   className={
@@ -53,16 +67,20 @@ export function CaseChatBubble({
                       : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50'
                   }
                 >
-                  {c.fileName} · 第 {c.page} 页
+                  {c.diseaseName ?? c.fileName ?? '病症信息'}
                 </button>
               ))}
             </div>
           </div>
         ) : null}
 
-        <div className={isUser ? 'mt-3 text-right text-xs text-white/70' : 'mt-3 text-right text-xs text-slate-400'}>
-          {formatDateTime(message.createdAt)}
-        </div>
+        {!hideTimestamp ? (
+          <div
+            className={isUser ? 'mt-3 text-right text-xs text-white/70' : 'mt-3 text-right text-xs text-slate-400'}
+          >
+            {formatDateTime(message.createdAt)}
+          </div>
+        ) : null}
       </div>
     </div>
   )

@@ -1,13 +1,14 @@
 # med 前端逻辑梳理与后端接口需求
 
-本文档基于当前前端实现（`src/` 中页面与 mock API）整理，覆盖前端整体逻辑、路由结构与后端接口需求，供前后端对齐。
+本文档基于当前前端实现（`src/` 中页面与后端 API）整理，覆盖前端整体逻辑、路由结构与后端接口需求，供前后端对齐。
 
 ## 1. 范围与现状
 
 - 前端技术栈：Vite + React + TypeScript + Tailwind + React Router + @tanstack/react-query。
-- 数据层：所有数据来自 `src/api/mockApi.ts`，并通过 `src/api/queries.ts` 中的 hooks 使用；未接入真实后端。
-- 认证状态：登录页仅做跳转（无真实鉴权/令牌存储）。
+- 数据层：通过 `src/api/backendApi.ts` 对接后端 API，并由 `src/api/queries.ts` 提供 hooks。
+- 认证状态：登录页写入 access/refresh token，路由由 `AuthGate` 做鉴权守卫。
 - 存储：`localStorage` 用于保存最近一次问诊 ID（key: `doctor:lastConsultationId`）。
+- 核心类型：以 `src/types.ts` 为准，包含 `CaseStatus(open|in_review|closed)`、`ConsultationDraft`、`ConsultationSuggestion`、`Citation` 等。
 
 ## 2. 路由结构
 
@@ -33,36 +34,31 @@
 - `/admin/stats/patients`：患者统计/查看
 - `/admin/settings`
 
-### 2.4 已存在但未挂载的页面
-以下页面已有实现，但当前路由未指向它们：
-- `src/pages/doctor/CasesPage.tsx`、`src/pages/doctor/CaseDetailPage.tsx`
-- `src/pages/doctor/StartConsultationPage.tsx`
-- `src/pages/admin/StatsCasesPage.tsx`
-
-备注：`/doctor/patients/:id` 的“发起问诊”按钮跳转至 `/doctor/chat?patientId=...`，但 `ChatPage` 并未读取该参数；`StartConsultationPage` 才支持 `patientId` 预设。该逻辑目前未打通。
+备注：`/doctor/patients/:id` 的“发起问诊”按钮跳转至 `/doctor/chat?patientId=...`，但 `ChatPage` 并未读取该参数，逻辑尚未打通。
 
 ## 3. 前端核心逻辑梳理
 
 ### 3.1 数据与状态管理
-- 所有请求封装在 `src/api/mockApi.ts`，并由 `src/api/queries.ts` 提供 query/mutation hooks。
+- 所有请求封装在 `src/api/backendApi.ts`，并由 `src/api/queries.ts` 提供 query/mutation hooks。
 - `react-query` 负责缓存与失效刷新，局部筛选、分页、排序为页面本地 state。
 - Query key 规则：
-  - 医生端：`['cases']`、`['doctor','patients']`、`['doctor','medicalCases']` 等
-  - 管理端：`['admin','users']`、`['admin','stats']`、`['admin','knowledge',...]`
+  - 医生端：`['cases']`、`['doctor','patients']` 等
+  - 管理端：`['admin','users']`、`['admin','stats']` 等
 
 ### 3.2 医生端主要流程
 
 1) 问诊列表（/doctor/consultations）
 - 数据：`useDoctorCases()` + `useDoctorPatients()`
 - 功能：患者筛选、状态筛选、关键词检索（ID/患者/症状/病症）
-- 操作：打开 `ConsultationWorkspaceModal` 进行继续问诊
+- 操作：打开 `ConsultationWorkspaceModal` 进行继续问诊（同一组件也在管理端统计中用于只读查看）
 
 2) 问诊对话（/doctor/chat）
 - 自动创建问诊：首次进入会调用 `createConsultation()`，并缓存最后问诊 ID
 - 对话消息：`useCaseMessages()` + `useSendConsultationMessage()`
 - 病例草稿：`useConsultationDraft()` + `useUpdateConsultationDraft()`
-- 病例结构化面板：`CaseBuilderPanel` 支持症状/病症/方剂/备注编辑、患者关联
-- 引用预览：消息中的 `Citation` → `SourcePreviewModal`
+- 病例结构化面板：`CaseBuilderPanel` 支持症状/病症/方剂/备注编辑、患者关联；字段状态为 `empty/suggested/confirmed/edited`
+- 候选建议：`useCaseSuggestions()` 返回 `ConsultationSuggestion`（疾病/证型/方剂候选、追问建议、置信度）
+- 引用预览：消息中的 `Citation` → `SourcePreviewModal`（来源于病症管理数据，仅展示病症详情卡片）
 
 3) 问诊详情（/doctor/consultations/:caseId）
 - 进入后渲染 `DoctorWorkspace`（对话 + 草稿侧栏）
@@ -72,12 +68,7 @@
 - 新建患者：`PatientUpsertModal` + `createDoctorPatient()`
 - 详情页：展示患者摘要信息，可发起问诊
 
-5) 病例管理（未路由）
-- `CasesPage`：病例列表，支持查看问诊、进入编辑页
-- `CaseDetailPage`：病例内容编辑（诊断、方剂、用法用量等）
-- 生成病例：`createMedicalCaseFromConsultation()` hook 已存在但未被页面调用
-
-6) 知识展示（/doctor/knowledge）
+5) 知识展示（/doctor/knowledge）
 - 仅展示 `CatalogEntry` 结构化目录；无需检索
 
 ### 3.3 管理端主要流程
@@ -91,6 +82,7 @@
 2) 病症管理（/admin/catalog）
 - 列表检索/分页
 - 新增/编辑病症（name、symptoms、formula、note）
+- 支持 Excel 批量导入（`.xlsx/.xls`，前端使用 `XLSX` 解析）
 - 可跳转查看相关问诊（带 `disease` 过滤）
 
 3) 统计总览（/admin/stats/overview）
@@ -130,6 +122,7 @@
 - `GET /admin/diseases?q=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
 - `POST /admin/diseases`
 - `PATCH /admin/diseases/:diseaseId`
+- `POST /admin/diseases/import`（Excel 批量导入，multipart）
 
 字段对齐（`Disease`）：
 - `id, name, symptoms, formula, note?, createdAt, updatedAt`
@@ -139,47 +132,27 @@
   - 返回 `AdminStats`：`doctorConsultations[]`、`syndromeConsultations[]`、`formulaConsultations[]`、`doctorCityCounts[]`
 - `GET /admin/stats/consultations?q=&doctorId=&patientId=&status=&disease=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
 - `GET /admin/stats/patients?q=&doctorId=&region=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
-- `GET /admin/stats/cases?q=&doctorId=&patientId=&diagnosis=&formulaName=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`（页面已实现但未路由）
-
-### 4.5 Admin｜知识库管理与检索（预留）
-- `GET /admin/knowledge/files?q=&page=&pageSize=&sort=updatedAt|createdAt&order=`
-- `POST /admin/knowledge/files`（multipart）
-- `DELETE /admin/knowledge/files/:fileId`
-- `GET /admin/knowledge/search?query=&page=&pageSize=`
-- `GET /admin/knowledge/files/:fileId/view`
-
-字段对齐：
-- `KnowledgeFile`: `id, fileName, fileType, fileSize, status(processing|ready|failed), createdAt, updatedAt, viewUrl?`
-- `KnowledgeSearchHit`: `id, fileId, fileName, fileType, page, snippet, score?, viewUrl?`
-
-### 4.6 Doctor｜问诊（Consultation）
+### 4.5 Doctor｜问诊（Consultation）
 - `GET /doctor/consultations?q=&patientId=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
 - `POST /doctor/consultations`（可携带 `patientId`）
 - `GET /doctor/consultations/:consultationId`
 - `GET /doctor/consultations/:consultationId/messages?page=&pageSize=`
-- `POST /doctor/consultations/:consultationId/messages`
-- `GET /doctor/consultations/:consultationId/suggestions`
-- `GET /doctor/consultations/:consultationId/draft`
-- `PATCH /doctor/consultations/:consultationId/draft`
-- `POST /doctor/consultations/:consultationId/close`（可选）
+- `POST /doctor/consultations/:consultationId/messages`（SSE）
+  - `GET /doctor/consultations/:consultationId/suggestions`（`ConsultationSuggestion`）
+  - `GET /doctor/consultations/:consultationId/draft`
+  - `PATCH /doctor/consultations/:consultationId/draft`
+  - `POST /doctor/consultations/:consultationId/close`（可选）
 
 消息发送返回建议包含：
 - `assistantMessage`（Message）
-- `citations[]`（引用：文件 + 页码）
+- `citations[]`（引用：病症管理条目）
 - `extractions`（病例字段候选）
 - `nextQuestions[]`
+流式说明：
+- `delta` 事件仅包含回复文本片段（用于实时展示）
+- `done` 事件返回结构化建议（等价 `ConsultationSuggestionOut`），候选病症概率在此时统一返回
 
-### 4.7 Doctor｜病例（Medical Case）
-- `GET /doctor/cases?q=&patientId=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
-- `POST /doctor/cases`（从问诊草稿写入）
-- `GET /doctor/cases/:caseId`
-- `PATCH /doctor/cases/:caseId`
-
-字段对齐：
-- `MedicalCaseSummary`: `id, patientId, patientName, diagnosis, formulaName, consultationId?, doctorName?, createdAt, updatedAt`
-- `MedicalCaseDetails`: `symptoms, formulaDetail, usageNote, note?`
-
-### 4.8 Doctor｜患者（Patient）
+### 4.6 Doctor｜患者（Patient）
 - `GET /doctor/patients?q=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
 - `POST /doctor/patients`
 - `GET /doctor/patients/:patientId`
@@ -188,14 +161,11 @@
 字段对齐：
 - `id, name, gender?, age?, birthday?, region?, phone?, email?, note?, doctorName?, createdAt, updatedAt`
 
-### 4.9 结构化知识目录
+### 4.7 结构化知识目录
 - `GET /catalog` 或 `GET /doctor/catalog`
 
 字段对齐（`CatalogEntry`）：
 - `id, name, category(disease|syndrome|symptom|formula), description, linkedTo?`
-
-### 4.10 审计日志（可选）
-- `GET /admin/audits`（当前页面未使用）
 
 ## 5. 通用约束与规范
 
@@ -212,8 +182,8 @@
 - 列表返回：`items`, `total`, `page`, `pageSize`
 
 3) 引用与预览
-- 引用仅支持页码：`Citation` 必须包含 `fileId, fileName, page`
-- 预览依赖 `viewUrl` + `fileType`；pdf 拼接 `#page=`，doc/docx 使用 Office Viewer
+- 引用来自病症管理：`Citation` 建议包含 `diseaseId/diseaseName`
+- 预览仅展示病症详情卡片（症状/方剂/备注），不需要文件链接
 
 4) 错误格式建议
 - HTTP 状态码语义化（400/401/403/404/409/422/500）

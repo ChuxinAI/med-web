@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useAdminStats } from '../../api/queries'
+import { useAdminStats, useAdminUsers } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { HorizontalScroll } from '../../components/HorizontalScroll'
 import { TablePagination } from '../../components/TablePagination'
@@ -20,25 +20,42 @@ type TabKey = (typeof tabOptions)[number]['key']
 
 export function AdminStatsOverviewPage() {
   const { data } = useAdminStats()
+  const { data: users } = useAdminUsers()
   const [activeTab, setActiveTab] = useState<TabKey>('doctor')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
+  const doctorNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    ;(users ?? []).forEach((user) => {
+      if (user.id) map.set(user.id, user.name)
+      if (user.username) map.set(user.username, user.name)
+      if (user.name) map.set(user.name, user.name)
+    })
+    return map
+  }, [users])
+
   const rows = useMemo<StatRow[]>(() => {
     if (!data) return []
-    switch (activeTab) {
+    const items = (() => {
+      switch (activeTab) {
       case 'doctor':
-        return data.doctorConsultations.map((item) => ({ name: item.doctorName, count: item.count }))
+          return data.doctorConsultations.map((item) => ({
+          name: doctorNameMap.get(item.doctorName) ?? item.doctorName,
+          count: item.count,
+        }))
       case 'syndrome':
-        return data.syndromeConsultations.map((item) => ({ name: item.syndrome, count: item.count }))
+          return data.syndromeConsultations.map((item) => ({ name: item.syndrome, count: item.count }))
       case 'formula':
-        return data.formulaConsultations.map((item) => ({ name: item.formula, count: item.count }))
+          return data.formulaConsultations.map((item) => ({ name: item.formula, count: item.count }))
       case 'city':
-        return data.doctorCityCounts.map((item) => ({ name: item.city, count: item.count }))
+          return data.doctorCityCounts.map((item) => ({ name: item.city, count: item.count }))
       default:
-        return []
-    }
-  }, [activeTab, data])
+          return []
+      }
+    })()
+    return items.sort((a, b) => b.count - a.count)
+  }, [activeTab, data, doctorNameMap])
 
   const total = rows.length
   const pageCount = Math.max(1, Math.ceil(total / pageSize))

@@ -4,10 +4,12 @@ export function PasswordResetModal({
   open,
   onClose,
   onSuccess,
+  onReset,
 }: {
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  onReset?: (oldPassword: string, newPassword: string) => Promise<void> | void
 }) {
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -33,14 +35,22 @@ export function PasswordResetModal({
     if (newPassword !== confirmPassword) return setError('两次输入的新密码不一致。')
 
     setPending(true)
-    window.setTimeout(() => {
-      setPending(false)
+    try {
+      if (onReset) {
+        await onReset(oldPassword, newPassword)
+      } else {
+        await new Promise((resolve) => window.setTimeout(resolve, 300))
+      }
       setOldPassword('')
       setNewPassword('')
       setConfirmPassword('')
       onSuccess()
       onClose()
-    }, 300)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新失败')
+    } finally {
+      setPending(false)
+    }
   }
 
   return (
@@ -122,4 +132,3 @@ export function PasswordResetModal({
     </div>
   )
 }
-

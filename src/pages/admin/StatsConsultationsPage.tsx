@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useDoctorCases, useDoctorPatients } from '../../api/queries'
+import { useAdminConsultations, useAdminPatients } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { ConsultationWorkspaceModal } from '../../components/ConsultationWorkspaceModal'
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
@@ -12,8 +12,8 @@ export function AdminConsultationsStatsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const patientIdFilter = searchParams.get('patientId')
   const diseaseFilter = searchParams.get('disease')
-  const { data: consultations } = useDoctorCases()
-  const { data: patients } = useDoctorPatients()
+  const { data: consultations } = useAdminConsultations()
+  const { data: patients } = useAdminPatients()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<'all' | 'open' | 'in_review' | 'closed'>('all')
   const [openConsultationId, setOpenConsultationId] = useState<string | null>(null)
@@ -33,6 +33,7 @@ export function AdminConsultationsStatsPage() {
       .filter((c) => (status === 'all' ? true : c.status === status))
       .filter((c) => {
         if (!patientIdFilter) return true
+        if (c.patientId) return c.patientId === patientIdFilter
         if (filteredPatientName && filteredPatientName !== patientIdFilter) {
           return c.patientName === filteredPatientName
         }

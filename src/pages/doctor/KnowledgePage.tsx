@@ -4,6 +4,11 @@ import { Card } from '../../components/Card'
 
 export function KnowledgePage() {
   const { data: catalog } = useCatalog()
+  const typeLabelMap: Record<string, string> = {
+    disease: '疾病',
+    syndrome: '症候',
+    symptom: '症状',
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -13,12 +18,18 @@ export function KnowledgePage() {
             <div key={item.id} className="rounded-xl border border-slate-100 bg-white/80 p-3 shadow-sm">
               <div className="flex items-center justify-between">
                 <p className="font-semibold text-ink">{item.name}</p>
-                <Badge tone="info">{item.category}</Badge>
+                <Badge tone="info">disease</Badge>
               </div>
-              <p className="mt-1 text-slate-600">{item.description}</p>
-              {item.linkedTo && (
-                <p className="mt-1 text-xs text-slate-500">关联：{item.linkedTo.join(' / ')}</p>
-              )}
+              <p className="mt-1 text-xs text-slate-500">
+                类型：{[item.typeName, typeLabelMap[item.typeCode] ?? item.typeCode].filter(Boolean).join(' / ') || '—'}
+              </p>
+              <p className="mt-1 text-slate-600">{item.symptoms}</p>
+              {item.differentiation ? (
+                <p className="mt-1 text-xs text-slate-500">鉴别：{item.differentiation}</p>
+              ) : null}
+              {item.formula ? (
+                <p className="mt-1 text-xs text-slate-500">方剂：{item.formula}</p>
+              ) : null}
             </div>
           ))}
         </div>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useDoctorPatients, useUpdateDoctorPatient } from '../../api/queries'
+import { useAdminPatients, useUpdateDoctorPatient } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { TablePagination } from '../../components/TablePagination'
 import { getPatientAge } from '../../lib/patient'
@@ -10,7 +10,7 @@ import type { Patient } from '../../types'
 import { getCityFromRegion } from '../../lib/region'
 
 export function AdminPatientsPage() {
-  const { data: patients } = useDoctorPatients()
+  const { data: patients } = useAdminPatients()
   const updatePatient = useUpdateDoctorPatient()
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
@@ -21,7 +21,7 @@ export function AdminPatientsPage() {
     const keyword = q.trim()
     return (patients ?? []).filter((p) => {
       if (!keyword) return true
-      return [p.id, p.name, p.doctorName, getCityFromRegion(p.region), p.phone, p.email]
+      return [p.id, p.name, p.doctorName, getCityFromRegion(p.region), p.phone]
         .filter(Boolean)
         .join(' ')
         .includes(keyword)
@@ -47,7 +47,7 @@ export function AdminPatientsPage() {
               setQ(e.target.value)
               setPage(1)
             }}
-            placeholder="检索：医生/患者/城市/电话/邮箱/ID"
+            placeholder="检索：医生/患者/城市/电话/ID"
             className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-80"
           />
         </div>
@@ -66,9 +66,7 @@ export function AdminPatientsPage() {
                   <div className="mt-2 text-sm text-slate-700">
                     {getPatientAge(p) != null ? `${getPatientAge(p)} 岁` : ''}{getCityFromRegion(p.region) ? ` · ${getCityFromRegion(p.region)}` : ''}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {[p.phone, p.email].filter(Boolean).join(' · ') || '—'}
-                  </div>
+                  <div className="mt-1 text-xs text-slate-500">{p.phone ?? '—'}</div>
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -96,7 +94,7 @@ export function AdminPatientsPage() {
 
       <div className="hidden lg:block">
         <HorizontalScroll className="touch-pan-x overscroll-x-contain rounded-2xl border border-slate-100 bg-white/70">
-          <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+          <table className="w-full min-w-[880px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th className="w-[12%] px-4 py-3">患者ID</th>
@@ -105,8 +103,7 @@ export function AdminPatientsPage() {
                 <th className="w-[10%] px-4 py-3">年龄</th>
                 <th className="w-[14%] px-4 py-3">城市</th>
                 <th className="w-[16%] px-4 py-3">电话</th>
-                <th className="w-[22%] px-4 py-3">邮箱</th>
-                <th className="w-[14%] px-4 py-3 text-center">操作</th>
+                <th className="w-[20%] px-4 py-3 text-center">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -120,7 +117,6 @@ export function AdminPatientsPage() {
                   <td className="px-4 py-3 text-slate-700">{getPatientAge(p) ?? ''}</td>
                   <td className="px-4 py-3 text-slate-700">{getCityFromRegion(p.region)}</td>
                   <td className="px-4 py-3 text-slate-700">{p.phone ?? '-'}</td>
-                  <td className="truncate px-4 py-3 text-slate-700">{p.email ?? '-'}</td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <button
@@ -142,7 +138,7 @@ export function AdminPatientsPage() {
               ))}
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                     无匹配记录
                   </td>
                 </tr>
