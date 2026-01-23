@@ -43,6 +43,7 @@
 - 类型定义：`src/types.ts`
 - 设计与主题：`src/index.css`、`tailwind.config.js`
 - 接口/逻辑说明：`docs/frontend-backend-overview.md`
+- 部署说明：`docs/deploy-aliyun.md`
 
 ## 更新约定
 - 每次做更新前后都检查本文件是否需要同步更新
