@@ -21,8 +21,20 @@
 ```bash
 npm install
 npm run dev    # 启动本地开发（默认端口 5174）
+npm run dev:sandbox    # 启动 sandbox 配置
+npm run dev:online     # 启动 online 配置
 npm run build  # TS 检查 + 生产构建
+npm run build:sandbox  # TS 检查 + sandbox 构建
+npm run build:online   # TS 检查 + online 构建
 ```
+
+## 环境配置
+- 读取方式：Vite env（`import.meta.env`）
+- 当前使用：`VITE_API_BASE_URL`（默认 `http://localhost:8100`）
+- 环境文件：
+  - `.env.sandbox`：sandbox 环境
+  - `.env.online`：online 环境
+- 使用方式：启动/构建时通过 `--mode` 加载对应环境文件
 
 ## 登录入口
 - 医生端：`/doctor/login`（根目录 `/` 与 `/login` 默认跳转到这里）

@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:sandbox": "vite --mode sandbox",
+    "dev:online": "vite --mode online",
     "build": "tsc -b && vite build",
+    "build:sandbox": "tsc -b && vite build --mode sandbox",
+    "build:online": "tsc -b && vite build --mode online",
     "lint": "eslint .",
     "preview": "vite preview"
   },

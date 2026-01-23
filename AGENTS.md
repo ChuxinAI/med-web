@@ -12,7 +12,19 @@
 ## 常用命令
 - 安装依赖：`npm install`
 - 本地开发：`npm run dev`（默认端口 5174）
+- 本地开发（sandbox）：`npm run dev:sandbox`
+- 本地开发（online）：`npm run dev:online`
 - 构建：`npm run build`
+- 构建（sandbox）：`npm run build:sandbox`
+- 构建（online）：`npm run build:online`
+
+## 环境配置
+- 读取方式：Vite env（`import.meta.env`）
+- 当前使用：`VITE_API_BASE_URL`（默认 `http://localhost:8100`）
+- 环境文件：
+  - `.env.sandbox`：sandbox 环境
+  - `.env.online`：online 环境
+- 使用方式：启动/构建时通过 `--mode` 加载对应环境文件
 
 ## 目录与关键文件
 - 路由：`src/router.tsx`
