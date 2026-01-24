@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ConsultationDraft, Patient } from '../types'
 import { PatientUpsertModal } from './PatientUpsertModal'
 import { getPatientAge } from '../lib/patient'
@@ -17,6 +17,7 @@ export function CaseBuilderPanel({
   readOnly = false,
   onCreatePatient,
   onSaveDraft,
+  onDraftChange,
 }: {
   consultationId: string
   draft: ConsultationDraft
@@ -26,12 +27,24 @@ export function CaseBuilderPanel({
   readOnly?: boolean
   onCreatePatient: (input: PatientCreateInput) => Promise<Patient>
   onSaveDraft: (draft: ConsultationDraft) => Promise<void> | void
+  onDraftChange?: (draft: ConsultationDraft) => void
 }) {
   const [localDraft, setLocalDraft] = useState<ConsultationDraft>(() => draft)
   const [patientPickerOpen, setPatientPickerOpen] = useState(false)
   const [patientQuery, setPatientQuery] = useState('')
   const [createPatientOpen, setCreatePatientOpen] = useState(false)
   const [saveNotice, setSaveNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
+
+  const updateLocalDraft = useCallback(
+    (updater: (prev: ConsultationDraft) => ConsultationDraft) => {
+      setLocalDraft((prev) => {
+        const next = updater(prev)
+        onDraftChange?.(next)
+        return next
+      })
+    },
+    [onDraftChange],
+  )
 
   useEffect(() => {
     setLocalDraft(draft)
@@ -40,16 +53,16 @@ export function CaseBuilderPanel({
   useEffect(() => {
     if (readOnly) return
     if (!Array.isArray(suggestedSymptoms) || suggestedSymptoms.length === 0) return
-    const symptomsText = suggestedSymptoms.join('、')
-    setLocalDraft((prev) => {
-      if (prev.symptoms === symptomsText) return prev
+    updateLocalDraft((prev) => {
+      const merged = mergeSymptoms(prev.symptoms, suggestedSymptoms)
+      if (merged === prev.symptoms) return prev
       return {
         ...prev,
-        symptoms: symptomsText,
+        symptoms: merged,
         status: { ...prev.status, symptoms: 'suggested' },
       }
     })
-  }, [readOnly, suggestedSymptoms])
+  }, [readOnly, suggestedSymptoms, updateLocalDraft])
 
   const filteredPatients = useMemo(() => {
     const keyword = patientQuery.trim()
@@ -110,7 +123,7 @@ export function CaseBuilderPanel({
                         key={p.id}
                         type="button"
                         onClick={() => {
-                          setLocalDraft((prev) => ({
+                          updateLocalDraft((prev) => ({
                             ...prev,
                             patientId: p.id,
                             status: { ...prev.status, patientId: 'confirmed' },
@@ -146,6 +159,7 @@ export function CaseBuilderPanel({
                 status: { ...localDraft.status, patientId: 'confirmed' as const },
               }
               setLocalDraft(next)
+              onDraftChange?.(next)
               setPatientPickerOpen(false)
               await onSaveDraft(next)
             }}
@@ -160,7 +174,7 @@ export function CaseBuilderPanel({
           readOnly={readOnly}
           hideStatus
           onChange={(value) =>
-            setLocalDraft((prev) => ({
+            updateLocalDraft((prev) => ({
               ...prev,
               symptoms: value,
               status: { ...prev.status, symptoms: value.trim() ? 'edited' : 'empty' },
@@ -175,14 +189,14 @@ export function CaseBuilderPanel({
           rows={3}
           readOnly={readOnly}
           onPickCandidate={(value) =>
-            setLocalDraft((prev) => ({
+            updateLocalDraft((prev) => ({
               ...prev,
               diagnosis: value,
               status: { ...prev.status, diagnosis: 'confirmed' },
             }))
           }
           onChange={(value) =>
-            setLocalDraft((prev) => ({
+            updateLocalDraft((prev) => ({
               ...prev,
               diagnosis: value,
               status: { ...prev.status, diagnosis: value.trim() ? 'edited' : 'empty' },
@@ -197,14 +211,14 @@ export function CaseBuilderPanel({
           rows={3}
           readOnly={readOnly}
           onPickCandidate={(value) =>
-            setLocalDraft((prev) => ({
+            updateLocalDraft((prev) => ({
               ...prev,
               formulaName: value,
               status: { ...prev.status, formulaName: 'confirmed' },
             }))
           }
           onChange={(value) =>
-            setLocalDraft((prev) => ({
+            updateLocalDraft((prev) => ({
               ...prev,
               formulaName: value,
               status: { ...prev.status, formulaName: value.trim() ? 'edited' : 'empty' },
@@ -220,7 +234,7 @@ export function CaseBuilderPanel({
           readOnly={readOnly}
           hideStatus
           onChange={(value) =>
-            setLocalDraft((prev) => ({
+            updateLocalDraft((prev) => ({
               ...prev,
               note: value,
               status: { ...prev.status, note: value.trim() ? 'edited' : 'empty' },
@@ -275,6 +289,25 @@ function statusPill(status: ConsultationDraft['status'][keyof ConsultationDraft[
   if (status === 'suggested') return 'bg-blue-50 text-blue-700'
   if (status === 'edited') return 'bg-violet-50 text-violet-700'
   return 'bg-slate-100 text-slate-700'
+}
+
+function mergeSymptoms(current: string, incoming: string[]) {
+  const currentList = splitSymptoms(current)
+  const normalized = new Set(currentList)
+  incoming.forEach((item) => {
+    const trimmed = item.trim()
+    if (!trimmed) return
+    normalized.add(trimmed)
+  })
+  return Array.from(normalized).join('、')
+}
+
+function splitSymptoms(value: string) {
+  if (!value.trim()) return []
+  return value
+    .split(/[、,，\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 function FieldEditor({

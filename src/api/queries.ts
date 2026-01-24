@@ -23,6 +23,7 @@ import {
   importDiseasesFromFile,
   resetAdminUserPassword,
   sendConsultationDialogue,
+  sendConsultationDialogueStream,
   sendConsultationMessage,
   setAdminUserStatus,
   updateAdminUser,
@@ -40,6 +41,7 @@ import {
 import { getAccessToken } from './http'
 import { toConsultationSuggestion } from './backendMappers'
 import type { ConsultationSuggestionDto } from './backendTypes'
+import { isSuggestionMeaningful, readCachedSuggestion, writeCachedSuggestion } from '../lib/suggestionStorage'
 
 export const useLogin = () =>
   useMutation({
@@ -103,18 +105,40 @@ export const useCaseDetails = (caseId?: string) =>
     enabled: Boolean(caseId),
   })
 
-export const useCaseMessages = (caseId?: string) =>
+export const useCaseMessages = (
+  caseId?: string,
+  options?: {
+    enabled?: boolean
+    refetchOnMount?: boolean | 'always'
+  },
+) =>
   useQuery({
     queryKey: ['case', caseId, 'messages'],
     queryFn: () => fetchCaseMessages(caseId ?? ''),
-    enabled: Boolean(caseId),
+    enabled: options?.enabled ?? Boolean(caseId),
+    refetchOnMount: options?.refetchOnMount,
   })
 
-export const useCaseSuggestions = (caseId?: string) =>
+export const useCaseSuggestions = (
+  caseId?: string,
+  options?: {
+    enabled?: boolean
+    refetchOnMount?: boolean | 'always'
+  },
+) =>
   useQuery({
     queryKey: ['case', caseId, 'suggestions'],
-    queryFn: () => fetchSuggestions(caseId ?? ''),
-    enabled: Boolean(caseId),
+    queryFn: async () => {
+      const suggestion = await fetchSuggestions(caseId ?? '')
+      if (isSuggestionMeaningful(suggestion)) {
+        writeCachedSuggestion(caseId, suggestion)
+        return suggestion
+      }
+      return readCachedSuggestion(caseId) ?? suggestion
+    },
+    initialData: () => readCachedSuggestion(caseId),
+    enabled: options?.enabled ?? Boolean(caseId),
+    refetchOnMount: options?.refetchOnMount,
   })
 
 export const useAdminUsers = () =>
@@ -306,6 +330,7 @@ export const useSendConsultationMessage = () => {
           const suggestion = toConsultationSuggestion(raw)
           if (suggestion) {
             queryClient.setQueryData(['case', args.consultationId, 'suggestions'], suggestion)
+            writeCachedSuggestion(args.consultationId, suggestion)
           }
         },
         onError: args.onError,
@@ -333,6 +358,41 @@ export const useConsultationDialogue = () => {
       mode?: 'guided' | 'model_decision'
       topK?: number
     }) => sendConsultationDialogue(args),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['case', variables.consultationId, 'suggestions'],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['consultation', variables.consultationId, 'draft'],
+      })
+    },
+  })
+}
+
+export const useConsultationDecisionStream = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: {
+      consultationId: string
+      message?: string | null
+      topK?: number
+      onDelta?: (delta: string, payload?: unknown) => void
+      onDone?: (payload?: unknown) => void
+      onError?: (error: Error) => void
+    }) =>
+      sendConsultationDialogueStream(
+        {
+          consultationId: args.consultationId,
+          message: args.message,
+          mode: 'model_decision',
+          topK: args.topK,
+        },
+        {
+          onDelta: args.onDelta,
+          onDone: args.onDone,
+          onError: args.onError,
+        },
+      ),
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({
         queryKey: ['case', variables.consultationId, 'suggestions'],

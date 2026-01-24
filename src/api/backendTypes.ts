@@ -110,6 +110,21 @@ export interface ConsultationCandidateDiseaseDto {
   matched_symptoms?: string[]
 }
 
+export interface ConsultationCandidateSymptomDetailDto {
+  id: number
+  name: string
+  symptoms: string[]
+  matched_symptoms: string[]
+  unmatched_symptoms: string[]
+}
+
+export interface ConsultationReasoningTreeDto {
+  candidate_ids: number[]
+  ask_symptom: string | null
+  yes?: ConsultationReasoningTreeDto | null
+  no?: ConsultationReasoningTreeDto | null
+}
+
 export interface ConsultationDecisionDto {
   disease_name: string
   prescription: string
@@ -121,6 +136,9 @@ export interface ConsultationDialogueDto {
   confirmed_symptoms?: string[]
   extracted_symptoms?: string[]
   candidate_diseases?: ConsultationCandidateDiseaseDto[]
+  normalized_user_symptoms?: string[]
+  candidate_symptom_details?: ConsultationCandidateSymptomDetailDto[]
+  reasoning_tree?: ConsultationReasoningTreeDto | null
   followup_questions?: string[]
   decision?: ConsultationDecisionDto | null
   fallback_by_model?: boolean
@@ -134,6 +152,9 @@ export interface ConsultationSuggestionDto {
   confirmed_symptoms?: string[]
   next_questions: string[]
   candidate_diseases: ConsultationCandidateDiseaseDto[]
+  normalized_user_symptoms?: string[]
+  candidate_symptom_details?: ConsultationCandidateSymptomDetailDto[]
+  reasoning_tree?: ConsultationReasoningTreeDto | null
   fallback_by_model?: boolean
 }
 

@@ -7,7 +7,7 @@
 - 技术栈：Vite + React + TypeScript + Tailwind + React Router + @tanstack/react-query
 - 数据来源：以 `src/api/backendApi.ts` 为主
 - 认证：基于 `/auth/me` 做简单鉴权守卫，登录态由 access/refresh token 维持（医生端/管理端分开存储）
-- 存储：`localStorage` 保存最近问诊 ID（`doctor:lastConsultationId:<userId>`）
+- 存储：`localStorage` 保存最近问诊 ID（`doctor:lastConsultationId:<userId>`）、候选计算缓存（`consultation-suggestion:<consultationId>`）、推理选择记录（`consultation-reasoning:<consultationId>` / `consultation-reasoning-confirmed:<consultationId>`）
 
 ## 常用命令
 - 安装依赖：`npm install`
@@ -62,7 +62,7 @@
   - 建议：`useCaseSuggestions`
   - 消息发送：`/doctor/consultations/{id}/messages` 使用 SSE 流式响应
     - `delta` 仅包含回复文本片段；`done` 返回结构化建议，候选病症概率在 `done` 统一返回
-  - 模型决策：`/doctor/consultations/{id}/dialogue`（`mode=model_decision`，返回 `candidate_diseases`/`confirmed_symptoms`/`decision`）
+- 模型决策：`/doctor/consultations/{id}/dialogue/stream`（`mode=model_decision`，SSE：`delta` 文本片段，`done` 返回 `reply`/`candidate_diseases`/`confirmed_symptoms`/`decision`）
 
 ## 引用与预览约定
 - 引用来自病症管理数据（`Disease`）

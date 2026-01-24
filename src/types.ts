@@ -13,6 +13,21 @@ export interface ConsultationCandidateDisease {
   matchedSymptoms?: string[]
 }
 
+export interface ConsultationCandidateSymptomDetail {
+  id: string
+  name: string
+  symptoms: string[]
+  matchedSymptoms: string[]
+  unmatchedSymptoms: string[]
+}
+
+export interface ConsultationReasoningTree {
+  candidateIds: string[]
+  askSymptom: string | null
+  yes?: ConsultationReasoningTree | null
+  no?: ConsultationReasoningTree | null
+}
+
 export interface ConsultationDecision {
   diseaseName: string
   prescription: string
@@ -24,6 +39,9 @@ export interface ConsultationDialogue {
   confirmedSymptoms: string[]
   extractedSymptoms: string[]
   candidateDiseases: ConsultationCandidateDisease[]
+  normalizedUserSymptoms?: string[]
+  candidateSymptomDetails?: ConsultationCandidateSymptomDetail[]
+  reasoningTree?: ConsultationReasoningTree | null
   followupQuestions: string[]
   decision?: ConsultationDecision | null
   fallbackByModel?: boolean
@@ -91,6 +109,9 @@ export interface ConsultationSuggestion {
   candidateDiseases?: ConsultationCandidateDisease[]
   confirmedSymptoms?: string[]
   extractedSymptoms?: string[]
+  normalizedUserSymptoms?: string[]
+  candidateSymptomDetails?: ConsultationCandidateSymptomDetail[]
+  reasoningTree?: ConsultationReasoningTree | null
   decision?: ConsultationDecision | null
   fallbackByModel?: boolean
 }

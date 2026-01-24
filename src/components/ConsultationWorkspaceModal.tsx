@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   useCaseMessages,
   useCaseSuggestions,
+  useCatalog,
   useConsultationDraft,
   useCreateDoctorPatient,
   useDoctorPatients,
@@ -15,6 +16,8 @@ import { CaseChatBubble } from './CaseChatBubble'
 import { CaseBuilderPanel } from './CaseBuilderPanel'
 import { SourcePreviewModal } from './SourcePreviewModal'
 import { consultationGuideMessage } from '../lib/consultationGuide'
+import { ConsultationCandidatePanel } from './ConsultationCandidatePanel'
+import { dedupeSymptoms, readReasoningConfirmedSymptoms, writeReasoningConfirmedSymptoms } from '../lib/reasoningStorage'
 
 export function ConsultationWorkspaceModal({
   open,
@@ -32,13 +35,24 @@ export function ConsultationWorkspaceModal({
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null)
 
   const { data: patients } = useDoctorPatients()
+  const { data: catalog } = useCatalog()
   const createPatient = useCreateDoctorPatient()
-  const { data: messages } = useCaseMessages(consultationId ?? undefined)
-  const { data: suggestion } = useCaseSuggestions(consultationId ?? undefined)
+  const { data: messages } = useCaseMessages(consultationId ?? undefined, {
+    enabled: Boolean(consultationId) && open,
+    refetchOnMount: 'always',
+  })
+  const { data: suggestion } = useCaseSuggestions(consultationId ?? undefined, {
+    enabled: Boolean(consultationId) && open,
+    refetchOnMount: 'always',
+  })
   const { data: draft } = useConsultationDraft(consultationId ?? undefined)
   const updateDraft = useUpdateConsultationDraft()
   const sendMessage = useSendConsultationMessage()
-  const suggestedSymptoms = useMemo(() => suggestion?.confirmedSymptoms ?? [], [suggestion?.confirmedSymptoms])
+  const [reasoningConfirmedSymptoms, setReasoningConfirmedSymptoms] = useState<string[]>([])
+  const suggestedSymptoms = useMemo(() => {
+    if (reasoningConfirmedSymptoms.length > 0) return reasoningConfirmedSymptoms
+    return suggestion?.confirmedSymptoms ?? []
+  }, [reasoningConfirmedSymptoms, suggestion?.confirmedSymptoms])
 
   const [input, setInput] = useState('')
   const [pending, setPending] = useState(false)
@@ -50,6 +64,49 @@ export function ConsultationWorkspaceModal({
       .slice()
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
   }, [messages])
+
+  useEffect(() => {
+    setReasoningConfirmedSymptoms([])
+  }, [consultationId])
+
+  useEffect(() => {
+    if (!consultationId) return
+    const stored = readReasoningConfirmedSymptoms(consultationId)
+    if (stored.length === 0) return
+    setReasoningConfirmedSymptoms((prev) => {
+      if (prev.length > 0) return prev
+      const normalized = suggestion?.normalizedUserSymptoms ?? []
+      return dedupeSymptoms([...normalized, ...stored])
+    })
+  }, [consultationId, suggestion?.normalizedUserSymptoms])
+
+  const latestModelMessage = useMemo(() => {
+    for (let i = transcript.length - 1; i >= 0; i -= 1) {
+      if (transcript[i].sender === 'model') return transcript[i]
+    }
+    return null
+  }, [transcript])
+  const latestModelId = latestModelMessage?.id ?? null
+  const canShowInlineCandidatePanel = useMemo(() => {
+    if (!latestModelId) return false
+    if (latestModelMessage?.content.includes('模型自主分析')) return false
+    return true
+  }, [latestModelId, latestModelMessage?.content])
+  const suppressCandidatePanel = Boolean(latestModelMessage?.content.includes('模型自主分析'))
+  const candidatePanel =
+    consultationId && transcript.length > 0 && !pending && !suppressCandidatePanel ? (
+      <ConsultationCandidatePanel
+        suggestion={suggestion}
+        catalog={catalog}
+        onConfirmedSymptomsChange={(symptoms) => {
+          setReasoningConfirmedSymptoms(symptoms)
+          if (!consultationId || readOnly) return
+          writeReasoningConfirmedSymptoms(consultationId, symptoms)
+        }}
+        storageKey={consultationId}
+        readOnly={readOnly}
+      />
+    ) : null
 
   useEffect(() => {
     if (!open) return
@@ -101,8 +158,16 @@ export function ConsultationWorkspaceModal({
                   <div className="flex w-full max-w-3xl flex-col gap-4 lg:mx-auto">
 	                    <CaseChatBubble key="guide" message={consultationGuideMessage} onOpenCitation={(c) => setSelectedCitation(c)} />
                     {transcript.map((m) => (
-                      <CaseChatBubble key={m.id} message={m} onOpenCitation={(c) => setSelectedCitation(c)} />
+                      <CaseChatBubble
+                        key={m.id}
+                        message={m}
+                        onOpenCitation={(c) => setSelectedCitation(c)}
+                        footer={
+                          candidatePanel && canShowInlineCandidatePanel && m.id === latestModelId ? candidatePanel : null
+                        }
+                      />
                     ))}
+                    {candidatePanel && !canShowInlineCandidatePanel ? candidatePanel : null}
                     {pending ? (
                       <div className="flex justify-start">
                         <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">

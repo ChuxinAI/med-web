@@ -1,40 +1,214 @@
-import { useMemo, useState } from 'react'
-import type { ConsultationCandidateDisease, ConsultationDecision, ConsultationSuggestion, Disease } from '../types'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type {
+  ConsultationCandidateDisease,
+  ConsultationCandidateSymptomDetail,
+  ConsultationReasoningTree,
+  ConsultationSuggestion,
+  Disease,
+} from '../types'
 import { DiseaseDetailModal } from './DiseaseDetailModal'
+import { readReasoningConfirmedSymptoms } from '../lib/reasoningStorage'
+
+type CandidateSymptomDetailWithPartial = ConsultationCandidateSymptomDetail & {
+  partialMatchedCount: number
+}
 
 export function ConsultationCandidatePanel({
   suggestion,
   catalog,
-  decision,
-  decisionReply,
   decisionLoading,
   candidateLoading,
   onRequestDecision,
-  onAdoptDecision,
   onAdoptDisease,
+  onConfirmedSymptomsChange,
+  storageKey,
+  readOnly = false,
 }: {
   suggestion?: ConsultationSuggestion
   catalog?: Disease[]
-  decision?: ConsultationDecision | null
-  decisionReply?: string
   decisionLoading?: boolean
   candidateLoading?: boolean
   onRequestDecision?: () => void
-  onAdoptDecision?: (decision: ConsultationDecision) => void
   onAdoptDisease?: (disease: Disease, candidate: ConsultationCandidateDisease) => void
+  onConfirmedSymptomsChange?: (symptoms: string[]) => void
+  storageKey?: string
+  readOnly?: boolean
 }) {
-  const [showAll, setShowAll] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState<ConsultationCandidateDisease | null>(null)
+  const [currentNode, setCurrentNode] = useState<ConsultationReasoningTree | null>(null)
+  const [history, setHistory] = useState<ReasoningHistoryItem[]>([])
+  const [yesSymptoms, setYesSymptoms] = useState<string[]>([])
+  const [noSymptoms, setNoSymptoms] = useState<string[]>([])
+  const hasHydratedRef = useRef(false)
+  const hasUserInteractedRef = useRef(false)
 
   const candidates = suggestion?.candidateDiseases ?? []
-  const visibleCandidates = showAll ? candidates : candidates.slice(0, 5)
-  const hasMore = candidates.length > 5
+  const reasoningTree = suggestion?.reasoningTree ?? null
+  const normalizedUserSymptoms = suggestion?.normalizedUserSymptoms ?? []
+  const candidateSymptomDetails = suggestion?.candidateSymptomDetails ?? []
+  const candidateIdFilter = useMemo(() => {
+    if (!currentNode?.candidateIds?.length) return null
+    return new Set(currentNode.candidateIds.map((id) => String(id)))
+  }, [currentNode?.candidateIds])
   const diseaseMap = useMemo(() => {
     const map = new Map<string, Disease>()
     ;(catalog ?? []).forEach((item) => map.set(item.id, item))
     return map
   }, [catalog])
   const selectedDisease = selectedCandidate ? diseaseMap.get(selectedCandidate.id) : undefined
+  const candidateMatchedMap = useMemo(() => {
+    const map = new Map<string, string[]>()
+    candidates.forEach((item) => {
+      if (item.matchedSymptoms && item.matchedSymptoms.length > 0) {
+        map.set(item.id, item.matchedSymptoms)
+      }
+    })
+    return map
+  }, [candidates])
+  const symptomDetailMap = useMemo(() => {
+    const noSet = new Set(noSymptoms)
+    const map = new Map<string, CandidateSymptomDetailWithPartial>()
+    candidateSymptomDetails.forEach((detail) => {
+      const symptoms = detail.symptoms ?? []
+      const baseMatched =
+        normalizedUserSymptoms.length > 0
+          ? normalizedUserSymptoms
+          : [...detail.matchedSymptoms, ...(candidateMatchedMap.get(detail.id) ?? [])]
+      const confirmed = [...baseMatched, ...yesSymptoms]
+      const yesSet = new Set(confirmed)
+      const matchedSymptoms = symptoms.filter((symptom) => yesSet.has(symptom))
+      const unmatchedSymptoms = symptoms.filter((symptom) => !yesSet.has(symptom) && !noSet.has(symptom))
+      const partialMatchedCount = symptoms.reduce((count, symptom) => {
+        if (!symptom || yesSet.has(symptom) || noSet.has(symptom)) return count
+        return hasPartialSymptomMatch(symptom, confirmed) ? count + 1 : count
+      }, 0)
+      map.set(detail.id, {
+        ...detail,
+        matchedSymptoms,
+        unmatchedSymptoms,
+        partialMatchedCount,
+      })
+    })
+    return map
+  }, [candidateMatchedMap, candidateSymptomDetails, normalizedUserSymptoms, noSymptoms, yesSymptoms])
+  const filteredCandidates = useMemo(() => {
+    const source = candidateIdFilter ? candidates.filter((item) => candidateIdFilter.has(item.id)) : candidates
+    return source.slice().sort((a, b) => {
+      const scoreA = resolveProbability(a, symptomDetailMap)
+      const scoreB = resolveProbability(b, symptomDetailMap)
+      if (scoreB !== scoreA) return scoreB - scoreA
+      return a.name.localeCompare(b.name, 'zh-Hans-CN')
+    })
+  }, [candidateIdFilter, candidates, symptomDetailMap])
+  const visibleCandidates = filteredCandidates
+  const selectedSymptomDetail = selectedCandidate ? symptomDetailMap.get(selectedCandidate.id) : undefined
+  const askedSet = useMemo(
+    () => new Set([...normalizedUserSymptoms, ...yesSymptoms, ...noSymptoms]),
+    [normalizedUserSymptoms, noSymptoms, yesSymptoms],
+  )
+  const fallbackAskSymptom = useMemo(
+    () => pickNextSymptom(filteredCandidates, symptomDetailMap, askedSet),
+    [askedSet, filteredCandidates, symptomDetailMap],
+  )
+  const activeAskSymptom = currentNode?.askSymptom ?? fallbackAskSymptom ?? null
+  const isTreeAsk = Boolean(currentNode?.askSymptom)
+  const confirmedSymptoms = useMemo(
+    () => dedupeSymptoms([...normalizedUserSymptoms, ...yesSymptoms]),
+    [normalizedUserSymptoms, yesSymptoms],
+  )
+  const persistenceKey = storageKey ? `consultation-reasoning:${storageKey}` : null
+  const baseCandidateKey = useMemo(() => {
+    if (candidates.length === 0) return null
+    return candidates
+      .map((item) => item.id)
+      .slice()
+      .sort()
+      .join('|')
+  }, [candidates])
+
+  useEffect(() => {
+    hasHydratedRef.current = false
+    hasUserInteractedRef.current = false
+  }, [persistenceKey])
+
+  useEffect(() => {
+    if (!persistenceKey || !baseCandidateKey) {
+      setCurrentNode(reasoningTree)
+      setHistory([])
+      setYesSymptoms([])
+      setNoSymptoms([])
+      hasHydratedRef.current = true
+      return
+    }
+    const restored = restoreReasoningState(persistenceKey, reasoningTree, baseCandidateKey)
+    if (restored) {
+      setCurrentNode(restored.currentNode)
+      setHistory(restored.history)
+      setYesSymptoms(restored.yesSymptoms)
+      setNoSymptoms(restored.noSymptoms)
+      hasHydratedRef.current = true
+      return
+    }
+    const storedConfirmed = storageKey ? readReasoningConfirmedSymptoms(storageKey) : []
+    const seededYes =
+      storedConfirmed.length > 0
+        ? storedConfirmed.filter((item) => !normalizedUserSymptoms.includes(item))
+        : []
+    setCurrentNode(reasoningTree)
+    setHistory([])
+    setYesSymptoms(seededYes)
+    setNoSymptoms([])
+    hasHydratedRef.current = true
+  }, [baseCandidateKey, normalizedUserSymptoms, persistenceKey, reasoningTree, storageKey])
+
+  useEffect(() => {
+    if (!hasHydratedRef.current) return
+    if (!hasUserInteractedRef.current && confirmedSymptoms.length === 0) return
+    onConfirmedSymptomsChange?.(confirmedSymptoms)
+  }, [confirmedSymptoms, onConfirmedSymptomsChange])
+
+  useEffect(() => {
+    if (!hasHydratedRef.current) return
+    if (!persistenceKey || !baseCandidateKey) return
+    if (!hasUserInteractedRef.current && history.length === 0) return
+    persistReasoningState(persistenceKey, baseCandidateKey, history)
+  }, [baseCandidateKey, history, persistenceKey])
+
+  const handleAnswer = (answer: 'yes' | 'no') => {
+    if (readOnly) return
+    if (!activeAskSymptom) return
+    hasUserInteractedRef.current = true
+    const symptom = activeAskSymptom
+    if (isTreeAsk && currentNode?.askSymptom) {
+      const next = answer === 'yes' ? currentNode.yes : currentNode.no
+      if (!next) return
+      setHistory((prev) => [...prev, { node: currentNode, answer, symptom, mode: 'tree' }])
+      setCurrentNode(next)
+    } else {
+      setHistory((prev) => [...prev, { node: currentNode, answer, symptom, mode: 'fallback' }])
+    }
+    if (answer === 'yes') {
+      setYesSymptoms((prev) => [...prev, symptom])
+    } else {
+      setNoSymptoms((prev) => [...prev, symptom])
+    }
+  }
+
+  const handleBack = () => {
+    if (readOnly) return
+    hasUserInteractedRef.current = true
+    setHistory((prev) => {
+      if (prev.length === 0) return prev
+      const last = prev[prev.length - 1]
+      setCurrentNode(last.node ?? null)
+      if (last.answer === 'yes') {
+        setYesSymptoms((items) => removeLast(items, last.symptom))
+      } else {
+        setNoSymptoms((items) => removeLast(items, last.symptom))
+      }
+      return prev.slice(0, -1)
+    })
+  }
 
   return (
     <div className="rounded-xl bg-slate-100/80 px-3 py-2 text-xs text-slate-600">
@@ -54,63 +228,85 @@ export function ConsultationCandidatePanel({
               onClick={() => setSelectedCandidate(item)}
               className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700 transition hover:border-primary-200 hover:text-primary-700"
             >
-              {item.name} {formatProbability(item.probability)}
+              {item.name} {formatProbability(resolveProbability(item, symptomDetailMap))}
             </button>
           ))}
-          {hasMore ? (
-            <button
-              type="button"
-              onClick={() => setShowAll((prev) => !prev)}
-              className="text-xs font-semibold text-primary-600 hover:text-primary-700"
-            >
-              {showAll ? '收起' : '显示更多'}
-            </button>
-          ) : null}
         </div>
       ) : !candidateLoading ? (
         <div className="text-xs text-slate-500">未检索到合适的候选病症</div>
       ) : null}
 
-      {onRequestDecision ? (
+      {!candidateLoading && (currentNode || fallbackAskSymptom) ? (
+        <div className="mt-2 rounded-lg border border-slate-200/60 bg-white/70 px-2 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-slate-500">推理选择</span>
+            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+              <span>候选数 {filteredCandidates.length}</span>
+              <button
+                type="button"
+                onClick={handleBack}
+                disabled={readOnly || history.length === 0}
+                className="text-[11px] font-semibold text-slate-500 underline decoration-dotted underline-offset-2 disabled:opacity-40"
+              >
+                回退
+              </button>
+            </div>
+          </div>
+          {activeAskSymptom ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span>是否存在「{activeAskSymptom}」？</span>
+              <button
+                type="button"
+                onClick={() => handleAnswer('yes')}
+                disabled={readOnly || (isTreeAsk && !currentNode?.yes)}
+                className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 disabled:opacity-50"
+              >
+                是
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAnswer('no')}
+                disabled={readOnly || (isTreeAsk && !currentNode?.no)}
+                className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 disabled:opacity-50"
+              >
+                否
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2 text-[11px] text-slate-400">暂无可继续收敛的症状。</div>
+          )}
+          {(confirmedSymptoms.length > 0 || noSymptoms.length > 0) && (
+            <div className="mt-2 space-y-1 text-[11px] text-slate-500">
+              {confirmedSymptoms.length > 0 ? <div>已确认：{confirmedSymptoms.join('、')}</div> : null}
+              {noSymptoms.length > 0 ? <div>已否认：{noSymptoms.join('、')}</div> : null}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {onRequestDecision && !readOnly ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={onRequestDecision}
-            disabled={decisionLoading}
+            disabled={decisionLoading || candidateLoading}
             className="text-xs font-semibold text-slate-600 underline decoration-dotted underline-offset-2 hover:text-primary-700 disabled:opacity-60"
           >
             让模型决策
           </button>
-          {decisionLoading ? <span className="text-xs text-slate-400">模型决策中...</span> : null}
         </div>
       ) : null}
 
-      {decision || decisionReply ? (
-        <div className="mt-2 space-y-1">
-          {decisionReply ? <p className="whitespace-pre-wrap text-slate-600">{decisionReply}</p> : null}
-          {decision ? (
-            <p className="text-slate-600">
-              可能的疾病名称：{decision.diseaseName}；方剂：{decision.prescription}
-            </p>
-          ) : null}
-          {decision && onAdoptDecision ? (
-            <button
-              type="button"
-              onClick={() => onAdoptDecision(decision)}
-              className="text-xs font-semibold text-primary-600 hover:text-primary-700"
-            >
-              采纳
-            </button>
-          ) : null}
-        </div>
-      ) : null}
 
       <DiseaseDetailModal
         open={Boolean(selectedCandidate)}
         disease={selectedDisease}
+        matchedSymptoms={selectedSymptomDetail?.matchedSymptoms}
+        unmatchedSymptoms={selectedSymptomDetail?.unmatchedSymptoms}
+        confirmedSymptoms={confirmedSymptoms}
         onClose={() => setSelectedCandidate(null)}
         onConfirm={
-          selectedDisease && selectedCandidate && onAdoptDisease
+          selectedDisease && selectedCandidate && onAdoptDisease && !readOnly
             ? () => {
                 onAdoptDisease(selectedDisease, selectedCandidate)
                 setSelectedCandidate(null)
@@ -126,4 +322,160 @@ function formatProbability(value?: number) {
   if (value == null || Number.isNaN(value)) return '—'
   const rounded = Math.round(value)
   return `${rounded}%`
+}
+
+function resolveProbability(
+  candidate: ConsultationCandidateDisease,
+  symptomDetailMap: Map<string, CandidateSymptomDetailWithPartial>,
+) {
+  const detail = symptomDetailMap.get(candidate.id)
+  if (!detail || detail.symptoms.length === 0) return candidate.probability
+  const score =
+    (detail.matchedSymptoms.length + detail.partialMatchedCount * 0.5) / detail.symptoms.length
+  return Number.isFinite(score) ? score * 100 : candidate.probability
+}
+
+function removeLast(list: string[], value: string) {
+  const index = list.lastIndexOf(value)
+  if (index < 0) return list
+  return list.slice(0, index).concat(list.slice(index + 1))
+}
+
+function pickNextSymptom(
+  candidates: ConsultationCandidateDisease[],
+  symptomDetailMap: Map<string, CandidateSymptomDetailWithPartial>,
+  askedSet: Set<string>,
+) {
+  for (const candidate of candidates) {
+    const detail = symptomDetailMap.get(candidate.id)
+    if (!detail) continue
+    const next = detail.unmatchedSymptoms.find((symptom) => !askedSet.has(symptom))
+    if (next) return next
+  }
+  return null
+}
+
+function hasPartialSymptomMatch(target: string, confirmed: string[]) {
+  if (!target) return false
+  for (const item of confirmed) {
+    if (!item) continue
+    if (item === target) return true
+    if (item.includes(target) || target.includes(item)) return true
+  }
+  return false
+}
+
+function dedupeSymptoms(items: string[]) {
+  const seen = new Set<string>()
+  const result: string[] = []
+  items.forEach((item) => {
+    if (!item || seen.has(item)) return
+    seen.add(item)
+    result.push(item)
+  })
+  return result
+}
+
+type ReasoningHistoryItem = {
+  node: ConsultationReasoningTree | null
+  answer: 'yes' | 'no'
+  symptom: string
+  mode: 'tree' | 'fallback'
+}
+
+type ReasoningSnapshot = {
+  baseCandidateKey: string
+  answers: Array<Pick<ReasoningHistoryItem, 'answer' | 'symptom' | 'mode'>>
+}
+
+function persistReasoningState(
+  key: string,
+  baseCandidateKey: string,
+  history: ReasoningHistoryItem[],
+) {
+  if (typeof window === 'undefined') return
+  const snapshot: ReasoningSnapshot = {
+    baseCandidateKey,
+    answers: history.map((item) => ({ answer: item.answer, symptom: item.symptom, mode: item.mode })),
+  }
+  try {
+    window.localStorage.setItem(key, JSON.stringify(snapshot))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function restoreReasoningState(
+  key: string,
+  reasoningTree: ConsultationReasoningTree | null,
+  baseCandidateKey: string,
+) {
+  if (typeof window === 'undefined') return null
+  const raw = window.localStorage.getItem(key)
+  if (!raw) return null
+  try {
+    const snapshot = JSON.parse(raw) as ReasoningSnapshot
+    if (!snapshot || !Array.isArray(snapshot.answers) || snapshot.answers.length === 0) return null
+    const forceFallback = snapshot.baseCandidateKey !== baseCandidateKey || !reasoningTree
+    return applyReasoningAnswers(reasoningTree, snapshot.answers, forceFallback)
+  } catch {
+    return null
+  }
+}
+
+function applyReasoningAnswers(
+  reasoningTree: ConsultationReasoningTree | null,
+  answers: Array<Pick<ReasoningHistoryItem, 'answer' | 'symptom' | 'mode'>>,
+  forceFallback = false,
+) {
+  let currentNode: ConsultationReasoningTree | null = forceFallback ? null : reasoningTree
+  const history: ReasoningHistoryItem[] = []
+  const yesSymptoms: string[] = []
+  const noSymptoms: string[] = []
+  let allowTree = !forceFallback
+  for (const answer of answers) {
+    if (answer.mode === 'tree' && allowTree) {
+      if (!currentNode || currentNode.askSymptom !== answer.symptom) {
+        allowTree = false
+        currentNode = null
+      } else {
+        const next = answer.answer === 'yes' ? currentNode.yes : currentNode.no
+        if (!next) {
+          allowTree = false
+          currentNode = null
+        } else {
+          history.push({
+            node: currentNode,
+            answer: answer.answer,
+            symptom: answer.symptom,
+            mode: 'tree',
+          })
+          currentNode = next
+          if (answer.answer === 'yes') {
+            yesSymptoms.push(answer.symptom)
+          } else {
+            noSymptoms.push(answer.symptom)
+          }
+          continue
+        }
+      }
+    }
+    history.push({
+      node: currentNode,
+      answer: answer.answer,
+      symptom: answer.symptom,
+      mode: 'fallback',
+    })
+    if (answer.answer === 'yes') {
+      yesSymptoms.push(answer.symptom)
+    } else {
+      noSymptoms.push(answer.symptom)
+    }
+  }
+  return {
+    currentNode,
+    history,
+    yesSymptoms,
+    noSymptoms,
+  }
 }

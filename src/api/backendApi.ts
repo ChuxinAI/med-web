@@ -225,15 +225,25 @@ export async function updateConsultationDraft(
   consultationId: string,
   patch: Partial<ConsultationDraft>,
 ): Promise<ConsultationDraft> {
+  const payload: Record<string, unknown> = {}
+  if ('patientId' in patch) {
+    payload.patient_id = patch.patientId ? Number(patch.patientId) : null
+  }
+  if ('symptoms' in patch) {
+    payload.symptoms = patch.symptoms?.trim() ? patch.symptoms : null
+  }
+  if ('diagnosis' in patch) {
+    payload.disease = patch.diagnosis?.trim() ? patch.diagnosis : null
+  }
+  if ('formulaName' in patch) {
+    payload.formula = patch.formulaName?.trim() ? patch.formulaName : null
+  }
+  if ('note' in patch) {
+    payload.note = patch.note?.trim() ? patch.note : null
+  }
   const dto = await apiRequest<ConsultationDetailDto>(`/doctor/consultations/${consultationId}`, {
     method: 'PATCH',
-    body: JSON.stringify({
-      patient_id: patch.patientId ? Number(patch.patientId) : null,
-      symptoms: patch.symptoms?.trim() ? patch.symptoms : null,
-      disease: patch.diagnosis?.trim() ? patch.diagnosis : null,
-      formula: patch.formulaName?.trim() ? patch.formulaName : null,
-      note: patch.note?.trim() ? patch.note : null,
-    }),
+    body: JSON.stringify(payload),
   })
   return buildDraft(consultationId, dto)
 }
@@ -279,36 +289,10 @@ function extractStreamDelta(payload: unknown) {
   return ''
 }
 
-export async function sendConsultationMessage(
-  consultationId: string,
-  content: string,
-  handlers?: StreamHandlers,
-) {
-  const token = getAccessToken()
-  const response = await fetch(`${API_BASE_URL}/doctor/consultations/${consultationId}/messages`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ content }),
-  })
-
-  if (!response.ok) {
-    let payload: unknown = null
-    try {
-      payload = await response.json()
-    } catch {
-      payload = null
-    }
-    const error = buildApiError(payload, response.status)
-    handlers?.onError?.(error)
-    throw error
-  }
-
+async function readSseResponse(response: Response, handlers?: StreamHandlers) {
   if (!response.body) {
     handlers?.onDone?.()
-    return
+    return null
   }
 
   const reader = response.body.getReader()
@@ -316,6 +300,7 @@ export async function sendConsultationMessage(
   let buffer = ''
 
   let doneEmitted = false
+  let donePayload: unknown = null
   const handleEvent = (raw: string) => {
     if (!raw.trim()) return
     let event = ''
@@ -338,9 +323,11 @@ export async function sendConsultationMessage(
       }
     }
 
-    const normalizedEvent = event || (typeof payload === 'object' && payload ? (payload as { event?: string }).event : '')
+    const normalizedEvent =
+      event || (typeof payload === 'object' && payload ? (payload as { event?: string }).event : '')
     if (normalizedEvent === 'done') {
       if (!doneEmitted) {
+        donePayload = payload
         handlers?.onDone?.(payload)
         doneEmitted = true
       }
@@ -382,6 +369,84 @@ export async function sendConsultationMessage(
     handlers?.onError?.(err)
     throw err
   }
+
+  return donePayload
+}
+
+export async function sendConsultationMessage(
+  consultationId: string,
+  content: string,
+  handlers?: StreamHandlers,
+) {
+  const token = getAccessToken()
+  const response = await fetch(`${API_BASE_URL}/doctor/consultations/${consultationId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ content }),
+  })
+
+  if (!response.ok) {
+    let payload: unknown = null
+    try {
+      payload = await response.json()
+    } catch {
+      payload = null
+    }
+    const error = buildApiError(payload, response.status)
+    handlers?.onError?.(error)
+    throw error
+  }
+
+  await readSseResponse(response, handlers)
+}
+
+export async function sendConsultationDialogueStream(
+  args: {
+    consultationId: string
+    message?: string | null
+    mode?: 'guided' | 'model_decision'
+    topK?: number
+  },
+  handlers?: StreamHandlers,
+): Promise<ConsultationDialogue> {
+  const token = getAccessToken()
+  const response = await fetch(
+    `${API_BASE_URL}/doctor/consultations/${args.consultationId}/dialogue/stream`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        message: args.message ?? null,
+        mode: args.mode ?? 'model_decision',
+        top_k: args.topK ?? 10,
+      }),
+    },
+  )
+
+  if (!response.ok) {
+    let payload: unknown = null
+    try {
+      payload = await response.json()
+    } catch {
+      payload = null
+    }
+    const error = buildApiError(payload, response.status)
+    handlers?.onError?.(error)
+    throw error
+  }
+
+  const payload = await readSseResponse(response, handlers)
+  const dto =
+    payload && typeof payload === 'object'
+      ? (payload as ConsultationDialogueDto)
+      : ({ reply: '' } as ConsultationDialogueDto)
+  return toConsultationDialogue(dto)
 }
 
 export async function fetchDiseases(): Promise<Disease[]> {

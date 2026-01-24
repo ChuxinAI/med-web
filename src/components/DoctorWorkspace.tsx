@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   useCaseMessages,
   useCaseSuggestions,
   useCatalog,
-  useConsultationDialogue,
+  useConsultationDecisionStream,
   useConsultationDraft,
   useCreateDoctorPatient,
   useDoctorPatients,
@@ -17,7 +17,8 @@ import { ChatMessage } from './ChatMessage'
 import { Card } from './Card'
 import { CaseBuilderPanel } from './CaseBuilderPanel'
 import { extractAssistantContent } from '../lib/consultationStream'
-import type { CaseMessage, ConsultationDecision, ConsultationDialogue, Disease } from '../types'
+import { dedupeSymptoms, readReasoningConfirmedSymptoms, writeReasoningConfirmedSymptoms } from '../lib/reasoningStorage'
+import type { CaseMessage, ConsultationDraft, Disease } from '../types'
 
 export function DoctorWorkspace({ consultationId }: { consultationId?: string }) {
   const { caseId } = useParams()
@@ -30,21 +31,53 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   const createPatient = useCreateDoctorPatient()
   const updateDraft = useUpdateConsultationDraft()
   const sendMessage = useSendConsultationMessage()
-  const dialogue = useConsultationDialogue()
+  const decisionStream = useConsultationDecisionStream()
 
   const [optimisticMessages, setOptimisticMessages] = useState<CaseMessage[]>([])
   const [streamingMessage, setStreamingMessage] = useState<CaseMessage | null>(null)
-  const [decisionResult, setDecisionResult] = useState<ConsultationDialogue | null>(null)
+  const [decisionStreamingMessage, setDecisionStreamingMessage] = useState<CaseMessage | null>(null)
   const [candidatePending, setCandidatePending] = useState(false)
+  const [decisionPending, setDecisionPending] = useState(false)
+  const [reasoningConfirmedSymptoms, setReasoningConfirmedSymptoms] = useState<string[]>([])
   const candidateSnapshotRef = useRef<typeof suggestion | null>(null)
+  const draftSnapshotRef = useRef<ConsultationDraft | null>(null)
+  const bottomRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setOptimisticMessages([])
     setStreamingMessage(null)
-    setDecisionResult(null)
+    setDecisionStreamingMessage(null)
     setCandidatePending(false)
+    setDecisionPending(false)
+    setReasoningConfirmedSymptoms([])
     candidateSnapshotRef.current = null
+    draftSnapshotRef.current = null
   }, [activeId])
+
+  useEffect(() => {
+    if (!activeId) return
+    const stored = readReasoningConfirmedSymptoms(activeId)
+    if (stored.length === 0) return
+    setReasoningConfirmedSymptoms((prev) => {
+      if (prev.length > 0) return prev
+      const normalized = suggestion?.normalizedUserSymptoms ?? []
+      return dedupeSymptoms([...normalized, ...stored])
+    })
+  }, [activeId, suggestion?.normalizedUserSymptoms])
+
+  useEffect(() => {
+    if (!draft) return
+    draftSnapshotRef.current = draft
+  }, [draft])
+
+  const handleConfirmedSymptomsChange = useCallback(
+    (symptoms: string[]) => {
+      setReasoningConfirmedSymptoms(symptoms)
+      if (!activeId) return
+      writeReasoningConfirmedSymptoms(activeId, symptoms)
+    },
+    [activeId],
+  )
 
   useEffect(() => {
     if (!messages || messages.length === 0) return
@@ -81,32 +114,113 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
     }
   }, [candidatePending, suggestion])
 
-  const suggestedSymptoms = useMemo(() => suggestion?.confirmedSymptoms ?? [], [suggestion?.confirmedSymptoms])
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: 'end' })
+  }, [
+    messages?.length,
+    streamingMessage?.content,
+    decisionStreamingMessage?.content,
+    decisionStream.isPending,
+    decisionPending,
+    candidatePending,
+    suggestion?.candidateDiseases?.length,
+    suggestion?.candidateSymptomDetails?.length,
+  ])
+
+  const suggestedSymptoms = useMemo(() => {
+    if (reasoningConfirmedSymptoms.length > 0) return reasoningConfirmedSymptoms
+    return suggestion?.confirmedSymptoms ?? []
+  }, [reasoningConfirmedSymptoms, suggestion?.confirmedSymptoms])
 
   const groupedMessages = useMemo(
     () =>
-      (messages ?? [])
+      ((messages ?? [])
         .concat(optimisticMessages)
         .concat(streamingMessage && streamingMessage.content ? [streamingMessage] : [])
-        .slice()
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-    [messages, optimisticMessages, streamingMessage],
+        .concat(decisionStreamingMessage && decisionStreamingMessage.content ? [decisionStreamingMessage] : [])
+        .map((message, index) => ({ message, index }))
+        .sort((a, b) => {
+          const timeA = Date.parse(a.message.createdAt)
+          const timeB = Date.parse(b.message.createdAt)
+          if (Number.isFinite(timeA) && Number.isFinite(timeB) && timeA !== timeB) {
+            return timeA - timeB
+          }
+          if (Number.isFinite(timeA) && !Number.isFinite(timeB)) return -1
+          if (!Number.isFinite(timeA) && Number.isFinite(timeB)) return 1
+          return a.index - b.index
+        })
+        .map(({ message }) => message)),
+    [messages, optimisticMessages, streamingMessage, decisionStreamingMessage],
   )
 
-  const latestAssistantId = useMemo(() => {
+  const latestModelMessage = useMemo(() => {
     for (let i = groupedMessages.length - 1; i >= 0; i -= 1) {
-      if (groupedMessages[i].sender !== 'doctor') return groupedMessages[i].id
+      if (groupedMessages[i].sender === 'model') return groupedMessages[i]
     }
     return null
   }, [groupedMessages])
+  const latestModelId = latestModelMessage?.id ?? null
+  const canShowInlineCandidatePanel = useMemo(() => {
+    if (!latestModelId || decisionPending) return false
+    if (latestModelMessage?.content.includes('模型自主分析')) return false
+    return true
+  }, [decisionPending, latestModelId, latestModelMessage?.content])
 
   const [input, setInput] = useState('')
   const [casePanelOpen, setCasePanelOpen] = useState(false)
+
+  const suppressCandidatePanel = Boolean(latestModelMessage?.content.includes('模型自主分析'))
+  const canShowCandidatePanel =
+    Boolean(activeId) && (candidatePending || groupedMessages.length > 0) && !decisionPending && !suppressCandidatePanel
+  const candidatePanel = canShowCandidatePanel ? (
+    <ConsultationCandidatePanel
+      suggestion={suggestion}
+      catalog={catalog}
+      decisionLoading={decisionStream.isPending}
+      candidateLoading={candidatePending}
+      onConfirmedSymptomsChange={handleConfirmedSymptomsChange}
+      storageKey={activeId}
+      onRequestDecision={activeId ? () => void handleRequestDecision() : undefined}
+      onAdoptDisease={(disease) => void handleAdoptDisease(disease)}
+    />
+  ) : null
+
+  useEffect(() => {
+    if (candidatePending) return
+    if (!suggestion) return
+    if (!canShowCandidatePanel) return
+    bottomRef.current?.scrollIntoView({ block: 'end' })
+  }, [
+    candidatePending,
+    canShowCandidatePanel,
+    suggestion?.candidateDiseases?.length,
+    suggestion?.candidateSymptomDetails?.length,
+  ])
 
   const send = async () => {
     if (!activeId) return
     const content = input.trim()
     if (!content) return
+    const draftSnapshot = draftSnapshotRef.current
+    if (draftSnapshot) {
+      try {
+        await updateDraft.mutateAsync({
+          consultationId: activeId,
+          patch: {
+            patientId: draftSnapshot.patientId,
+            symptoms: draftSnapshot.symptoms,
+            diagnosis: draftSnapshot.diagnosis,
+            formulaName: draftSnapshot.formulaName,
+            formulaDetail: draftSnapshot.formulaDetail,
+            usageNote: draftSnapshot.usageNote,
+            note: draftSnapshot.note,
+            status: draftSnapshot.status,
+          },
+        })
+      } catch {
+        return
+      }
+    }
     const tempMessage: CaseMessage = {
       id: `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       sender: 'doctor',
@@ -122,7 +236,6 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
       isStreaming: true,
     }
     setStreamingMessage(streamMessage)
-    setDecisionResult(null)
     setInput('')
     candidateSnapshotRef.current = suggestion ?? null
     setCandidatePending(true)
@@ -169,6 +282,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
       patch: {
         diagnosis: disease.name,
         formulaName: disease.formula,
+        symptoms: draft.symptoms,
         status: {
           ...draft.status,
           diagnosis: 'confirmed',
@@ -178,20 +292,77 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
     })
   }
 
-  const handleAdoptDecision = async (decision: ConsultationDecision) => {
-    if (!activeId || !draft) return
-    await updateDraft.mutateAsync({
-      consultationId: activeId,
-      patch: {
-        diagnosis: decision.diseaseName,
-        formulaName: decision.prescription,
-        status: {
-          ...draft.status,
-          diagnosis: 'confirmed',
-          formulaName: 'confirmed',
+  const handleRequestDecision = async () => {
+    if (!activeId || decisionStream.isPending || decisionPending) return
+    const previousDecisionMessage = decisionStreamingMessage
+    setDecisionPending(true)
+    const streamMessage: CaseMessage = {
+      id: `decision-stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'model',
+      content: '',
+      createdAt: new Date().toISOString(),
+      isStreaming: true,
+    }
+    setDecisionStreamingMessage(streamMessage)
+    const draftSnapshot = draftSnapshotRef.current
+    if (draftSnapshot) {
+      try {
+        await updateDraft.mutateAsync({
+          consultationId: activeId,
+          patch: {
+            patientId: draftSnapshot.patientId,
+            symptoms: draftSnapshot.symptoms,
+            diagnosis: draftSnapshot.diagnosis,
+            formulaName: draftSnapshot.formulaName,
+            formulaDetail: draftSnapshot.formulaDetail,
+            usageNote: draftSnapshot.usageNote,
+            note: draftSnapshot.note,
+            status: draftSnapshot.status,
+          },
+        })
+      } catch {
+        setDecisionPending(false)
+        setDecisionStreamingMessage(previousDecisionMessage)
+        return
+      }
+    }
+    try {
+      await decisionStream.mutateAsync({
+        consultationId: activeId,
+        message: null,
+        onDelta: (delta) => {
+          if (!delta) return
+          setDecisionStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? { ...prev, content: `${prev.content}${delta}` }
+              : prev,
+          )
         },
-      },
-    })
+        onDone: (payload) => {
+          const payloadReply =
+            payload && typeof payload === 'object' && 'reply' in payload
+              ? String((payload as { reply?: string }).reply ?? '')
+              : ''
+          const finalText = extractAssistantContent(payload) || payloadReply
+          setDecisionStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? {
+                  ...prev,
+                  content: finalText || prev.content,
+                  isStreaming: false,
+                }
+              : prev,
+          )
+        },
+        onError: () => {
+          setDecisionStreamingMessage(null)
+        },
+      })
+    } catch {
+      setDecisionStreamingMessage(null)
+    } finally {
+      setDecisionPending(false)
+    }
   }
 
   const caseBuilder = !draft || !activeId ? (
@@ -203,6 +374,9 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
       patients={patients ?? []}
       suggestedSymptoms={suggestedSymptoms}
       saving={updateDraft.isPending}
+      onDraftChange={(next) => {
+        draftSnapshotRef.current = next
+      }}
       onCreatePatient={(input) => createPatient.mutateAsync(input)}
       onSaveDraft={async (next) => {
         await updateDraft.mutateAsync({
@@ -248,36 +422,31 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
                 <ChatMessage
                   key={m.id}
                   message={m}
-                  hideTimestamp={Boolean(streamingMessage && m.id === streamingMessage.id)}
+                  hideTimestamp={Boolean(m.isStreaming)}
                   footer={
-                    m.id === latestAssistantId && m.sender !== 'doctor' ? (
-                    <ConsultationCandidatePanel
-                      suggestion={suggestion}
-                      catalog={catalog}
-                      decision={decisionResult?.decision ?? null}
-                      decisionReply={decisionResult?.reply}
-                      decisionLoading={dialogue.isPending}
-                        candidateLoading={candidatePending}
-                        onRequestDecision={
-                          activeId
-                            ? () =>
-                                dialogue
-                                  .mutateAsync({
-                                    consultationId: activeId,
-                                    mode: 'model_decision',
-                                    message: null,
-                                  })
-                                  .then((result) => setDecisionResult(result))
-                                  .catch(() => setDecisionResult(null))
-                            : undefined
-                        }
-                        onAdoptDecision={(decision) => void handleAdoptDecision(decision)}
-                        onAdoptDisease={(disease) => void handleAdoptDisease(disease)}
-                      />
+                    m.id === latestModelId &&
+                    m.sender === 'model' &&
+                    !decisionPending &&
+                    !m.content.includes('模型自主分析') ? (
+                    candidatePanel
                     ) : null
                   }
                 />
               ))}
+              {!canShowInlineCandidatePanel && suggestion ? candidatePanel : null}
+              {decisionPending && !decisionStreamingMessage?.content ? (
+                <div className="rounded-2xl border border-slate-100 bg-white/80 p-3 text-sm text-slate-600 shadow-sm">
+                  <span className="inline-flex items-center">
+                    正在思考
+                    <span className="thinking-dots" aria-hidden>
+                      <span className="thinking-dot" />
+                      <span className="thinking-dot" />
+                      <span className="thinking-dot" />
+                    </span>
+                  </span>
+                </div>
+              ) : null}
+              <div ref={bottomRef} />
             </div>
           </div>
 

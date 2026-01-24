@@ -4,11 +4,17 @@ import type { Disease } from '../types'
 export function DiseaseDetailModal({
   open,
   disease,
+  matchedSymptoms,
+  unmatchedSymptoms,
+  confirmedSymptoms,
   onClose,
   onConfirm,
 }: {
   open: boolean
   disease?: Disease
+  matchedSymptoms?: string[]
+  unmatchedSymptoms?: string[]
+  confirmedSymptoms?: string[]
   onClose: () => void
   onConfirm?: () => void
 }) {
@@ -43,7 +49,7 @@ export function DiseaseDetailModal({
                 <InfoColumn label="类型名称" value={disease.typeName} />
                 <InfoColumn label="名称" value={disease.name} />
               </div>
-              <DetailBlock label="症状描述" value={disease.symptoms} />
+              <DetailBlock label="症状描述" value={disease.symptoms} highlightTerms={confirmedSymptoms} />
               <DetailBlock label="鉴别方法" value={disease.differentiation} />
               <DetailBlock label="方剂" value={disease.formula} />
               <DetailBlock label="备注" value={disease.note ?? ''} />
@@ -76,11 +82,20 @@ function InfoColumn({ label, value }: { label: string; value?: string }) {
   )
 }
 
-function DetailBlock({ label, value }: { label: string; value?: string }) {
+function DetailBlock({
+  label,
+  value,
+  highlightTerms,
+}: {
+  label: string
+  value?: string
+  highlightTerms?: string[]
+}) {
+  const content = value ? renderHighlightedText(value, highlightTerms) : '—'
   return (
     <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
       <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{value || '—'}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{content}</p>
     </div>
   )
 }
@@ -90,4 +105,30 @@ function resolveTypeLabel(typeCode?: string) {
   if (typeCode === '2' || typeCode === 'syndrome') return '症候'
   if (typeCode === '3' || typeCode === 'symptom') return '症状'
   return typeCode ?? '—'
+}
+
+function renderHighlightedText(value: string, terms?: string[]) {
+  const cleaned = Array.isArray(terms)
+    ? terms
+        .map((item) => (item ?? '').trim())
+        .filter((item) => item.length > 0)
+        .sort((a, b) => b.length - a.length)
+    : []
+  if (cleaned.length === 0) return value
+  const pattern = cleaned.map(escapeRegExp).join('|')
+  if (!pattern) return value
+  const regex = new RegExp(`(${pattern})`, 'g')
+  return value.split(regex).map((part, index) => {
+    if (!part) return null
+    const isMatch = cleaned.some((term) => term === part)
+    return (
+      <span key={`seg-${index}`} className={isMatch ? 'text-rose-600' : undefined}>
+        {part}
+      </span>
+    )
+  })
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

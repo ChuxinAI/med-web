@@ -4,9 +4,11 @@ import type {
   CaseMessage,
   CaseSummary,
   ConsultationCandidateDisease,
+  ConsultationCandidateSymptomDetail,
   ConsultationDecision,
   ConsultationDialogue,
   ConsultationDraft,
+  ConsultationReasoningTree,
   ConsultationSuggestion,
   Citation,
   Disease,
@@ -17,10 +19,12 @@ import type {
 import type {
   AdminStatsDto,
   ConsultationCandidateDiseaseDto,
+  ConsultationCandidateSymptomDetailDto,
   ConsultationDecisionDto,
   ConsultationDialogueDto,
   ConsultationDetailDto,
   ConsultationMessageDto,
+  ConsultationReasoningTreeDto,
   ConsultationSuggestionDto,
   ConsultationSummaryDto,
   DiseaseDto,
@@ -179,6 +183,28 @@ function toCitation(input: unknown): Citation | null {
   }
 }
 
+function toCandidateSymptomDetail(
+  dto: ConsultationCandidateSymptomDetailDto,
+): ConsultationCandidateSymptomDetail {
+  return {
+    id: String(dto.id),
+    name: dto.name,
+    symptoms: dto.symptoms ?? [],
+    matchedSymptoms: dto.matched_symptoms ?? [],
+    unmatchedSymptoms: dto.unmatched_symptoms ?? [],
+  }
+}
+
+function toReasoningTree(dto?: ConsultationReasoningTreeDto | null): ConsultationReasoningTree | null {
+  if (!dto) return null
+  return {
+    candidateIds: (dto.candidate_ids ?? []).map((id) => String(id)),
+    askSymptom: dto.ask_symptom ?? null,
+    yes: toReasoningTree(dto.yes ?? null),
+    no: toReasoningTree(dto.no ?? null),
+  }
+}
+
 export function toConsultationSuggestion(dto?: ConsultationSuggestionDto): ConsultationSuggestion | undefined {
   if (!dto) return undefined
   const candidates = Array.isArray(dto.candidate_diseases)
@@ -196,6 +222,9 @@ export function toConsultationSuggestion(dto?: ConsultationSuggestionDto): Consu
     candidateDiseases: candidates,
     confirmedSymptoms: dto.confirmed_symptoms ?? [],
     extractedSymptoms: dto.extracted_symptoms ?? [],
+    normalizedUserSymptoms: dto.normalized_user_symptoms ?? [],
+    candidateSymptomDetails: (dto.candidate_symptom_details ?? []).map(toCandidateSymptomDetail),
+    reasoningTree: toReasoningTree(dto.reasoning_tree ?? null),
     fallbackByModel: dto.fallback_by_model ?? false,
   }
 }
@@ -227,6 +256,9 @@ export function toConsultationDialogue(dto: ConsultationDialogueDto): Consultati
     confirmedSymptoms: dto.confirmed_symptoms ?? [],
     extractedSymptoms: dto.extracted_symptoms ?? [],
     candidateDiseases: (dto.candidate_diseases ?? []).map(toConsultationCandidateDisease),
+    normalizedUserSymptoms: dto.normalized_user_symptoms ?? [],
+    candidateSymptomDetails: (dto.candidate_symptom_details ?? []).map(toCandidateSymptomDetail),
+    reasoningTree: toReasoningTree(dto.reasoning_tree ?? null),
     followupQuestions: dto.followup_questions ?? [],
     decision: toConsultationDecision(dto.decision),
     fallbackByModel: dto.fallback_by_model ?? false,
