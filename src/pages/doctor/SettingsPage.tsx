@@ -7,6 +7,8 @@ import { InlineNotice } from '../../components/InlineNotice'
 import { RegionSelect } from '../../components/RegionSelect'
 import { parseRegionParts } from '../../lib/region'
 
+const phonePattern = /^\d{11}$/
+
 export function SettingsPage() {
   const { data: profile } = useCurrentUser('doctor')
   const updateProfile = useUpdateCurrentUser()
@@ -43,6 +45,11 @@ export function SettingsPage() {
     setError(null)
 
     try {
+      const trimmedPhone = editing.phone.trim()
+      if (trimmedPhone && !phonePattern.test(trimmedPhone)) {
+        setError('电话需为 11 位数字')
+        return
+      }
       const regionParts = parseRegionParts(editing.region)
       if (!regionParts.province || !regionParts.city || !regionParts.county) {
         setError('请选择完整的省/市/区')
@@ -54,7 +61,7 @@ export function SettingsPage() {
         province: regionParts.province || undefined,
         city: regionParts.city || undefined,
         county: regionParts.county || undefined,
-        phone: editing.phone.trim(),
+        phone: trimmedPhone,
         email: editing.email.trim(),
         note: editing.note.trim(),
       })

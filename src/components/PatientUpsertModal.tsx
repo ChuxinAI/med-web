@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Patient } from '../types'
 import { RegionSelect } from './RegionSelect'
@@ -29,16 +29,7 @@ export function PatientUpsertModal({
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
-  const canSubmit = useMemo(() => {
-    if (pending) return false
-    if (!name.trim()) return false
-    if (!gender) return false
-    if (!age.trim()) return false
-    if (!region.trim()) return false
-    if (!phone.trim()) return false
-    if (!phonePattern.test(phone.trim())) return false
-    return true
-  }, [age, gender, name, pending, phone, region])
+  const canSubmit = !pending
 
   if (!open) return null
   if (variant === 'portal' && typeof document === 'undefined') return null
