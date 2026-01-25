@@ -7,6 +7,8 @@ const REFRESH_TOKEN_KEY = 'med:refreshToken'
 const AUTH_SCOPE_KEY = 'med:authScope'
 let authScope: AuthScope = (localStorage.getItem(AUTH_SCOPE_KEY) as AuthScope) || 'doctor'
 
+const AUTH_HEADER_SKIP_PATHS = new Set(['/auth/login', '/auth/register', '/auth/logout'])
+
 function resolveKey(base: string, scope: AuthScope) {
   return `${base}:${scope}`
 }
@@ -38,6 +40,10 @@ export function setAuthTokens(accessToken: string, refreshToken?: string, scope:
 export function clearAuthTokens(scope: AuthScope = authScope) {
   localStorage.removeItem(resolveKey(ACCESS_TOKEN_KEY, scope))
   localStorage.removeItem(resolveKey(REFRESH_TOKEN_KEY, scope))
+}
+
+export function clearAllAuthTokens() {
+  ;(['doctor', 'admin'] as AuthScope[]).forEach((scope) => clearAuthTokens(scope))
 }
 
 function translateErrorCode(code: string) {
@@ -170,9 +176,11 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     headers.set('Content-Type', 'application/json')
   }
 
-  const token = getAccessToken()
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
+  if (!AUTH_HEADER_SKIP_PATHS.has(path)) {
+    const token = getAccessToken()
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    }
   }
 
   const response = await requestRaw(path, {

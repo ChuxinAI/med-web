@@ -18,6 +18,7 @@ import { CaseChatBubble } from '../../components/CaseChatBubble'
 import { CaseBuilderPanel } from '../../components/CaseBuilderPanel'
 import { CaseBuilderModal } from '../../components/CaseBuilderModal'
 import { ConsultationCandidatePanel } from '../../components/ConsultationCandidatePanel'
+import { InlineNotice } from '../../components/InlineNotice'
 import { SourcePreviewModal } from '../../components/SourcePreviewModal'
 import { consultationGuideMessage } from '../../lib/consultationGuide'
 import { extractAssistantContent } from '../../lib/consultationStream'
@@ -40,8 +41,10 @@ export function ChatPage() {
   const [candidatePending, setCandidatePending] = useState(false)
   const [decisionPending, setDecisionPending] = useState(false)
   const [reasoningConfirmedSymptoms, setReasoningConfirmedSymptoms] = useState<string[]>([])
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; message: string } | null>(null)
   const candidateSnapshotRef = useRef<typeof suggestion | null>(null)
   const draftSnapshotRef = useRef<ConsultationDraft | null>(null)
+  const createInFlightRef = useRef(false)
 
   const { data: currentUser } = useCurrentUser('doctor')
   const lastConsultationStorageKey = useMemo(
@@ -111,6 +114,17 @@ export function ChatPage() {
     [consultationId],
   )
 
+  const requestNewConsultation = useCallback(async () => {
+    if (createInFlightRef.current || createConsultation.isPending) return
+    createInFlightRef.current = true
+    try {
+      const res = await createConsultation.mutateAsync(undefined)
+      setConsultationId(res.consultationId)
+    } finally {
+      createInFlightRef.current = false
+    }
+  }, [createConsultation])
+
   useEffect(() => {
     if (consultationId) return
     const last = localStorage.getItem(lastConsultationStorageKey)
@@ -122,11 +136,8 @@ export function ChatPage() {
       setConsultationId(latestCaseId)
       return
     }
-    if (createConsultation.isPending) return
-    void createConsultation.mutateAsync(undefined).then((res) => {
-      setConsultationId(res.consultationId)
-    })
-  }, [consultationId, createConsultation, latestCaseId, lastConsultationStorageKey])
+    void requestNewConsultation()
+  }, [consultationId, latestCaseId, lastConsultationStorageKey, requestNewConsultation])
 
   useEffect(() => {
     if (!consultationId) return
@@ -135,11 +146,8 @@ export function ChatPage() {
     const status = (error as Error & { status?: number }).status
     if (status !== 404) return
     localStorage.removeItem(lastConsultationStorageKey)
-    if (createConsultation.isPending) return
-    void createConsultation.mutateAsync(undefined).then((res) => {
-      setConsultationId(res.consultationId)
-    })
-  }, [consultationId, createConsultation, draftError, messagesError, suggestionsError])
+    void requestNewConsultation()
+  }, [consultationId, draftError, lastConsultationStorageKey, messagesError, requestNewConsultation, suggestionsError])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
@@ -196,6 +204,19 @@ export function ChatPage() {
     return true
   }, [decisionPending, latestModelId, latestModelMessage?.content])
 
+  const isDraftEmpty = useMemo(() => {
+    if (!draft) return false
+    if (draft.patientId) return false
+    return (
+      draft.symptoms.trim().length === 0 &&
+      draft.diagnosis.trim().length === 0 &&
+      draft.formulaName.trim().length === 0 &&
+      draft.formulaDetail.trim().length === 0 &&
+      draft.usageNote.trim().length === 0 &&
+      draft.note.trim().length === 0
+    )
+  }, [draft])
+
   useEffect(() => {
     if (!messages || messages.length === 0) return
     setOptimisticMessages((prev) => {
@@ -228,6 +249,13 @@ export function ChatPage() {
     if (reasoningConfirmedSymptoms.length > 0) return reasoningConfirmedSymptoms
     return suggestion?.confirmedSymptoms ?? []
   }, [reasoningConfirmedSymptoms, suggestion?.confirmedSymptoms])
+
+  useEffect(() => {
+    if (!notice) return
+    if (transcript.length > 0 || !isDraftEmpty) {
+      setNotice(null)
+    }
+  }, [isDraftEmpty, notice, transcript.length])
   const caseBuilder = !consultationId || !draft ? (
     <div className="text-sm text-slate-600">正在加载...</div>
   ) : (
@@ -432,12 +460,14 @@ export function ChatPage() {
   }
 
   const startNew = async () => {
-    if (createConsultation.isPending) return
+    if (transcript.length === 0 && isDraftEmpty) {
+      setNotice({ tone: 'info', message: '当前问诊为空，无需开启新问诊。' })
+      return
+    }
     setPending(false)
     setInput('')
     try {
-      const res = await createConsultation.mutateAsync(undefined)
-      setConsultationId(res.consultationId)
+      await requestNewConsultation()
     } catch {
       // ignore
     }
@@ -546,7 +576,9 @@ export function ChatPage() {
         </div>
 
         <div className="border-t border-slate-100 bg-white/80 px-6 py-4 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+            {notice ? <InlineNotice tone={notice.tone} message={notice.message} /> : null}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -578,6 +610,7 @@ export function ChatPage() {
               >
                 开启新问诊
               </button>
+            </div>
             </div>
           </div>
         </div>

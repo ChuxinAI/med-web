@@ -1,5 +1,5 @@
 import type { UserSummary } from '../types'
-import { apiRequest, clearAuthTokens, getRefreshToken, setAuthScope, setAuthTokens } from './http'
+import { apiRequest, clearAllAuthTokens, getRefreshToken, setAuthScope, setAuthTokens } from './http'
 import type { TokenResponseDto, UserSummaryDto } from './backendTypes'
 import { toUserSummary } from './backendMappers'
 
@@ -22,7 +22,7 @@ export async function logout(refreshToken?: string) {
       })
     }
   } finally {
-    clearAuthTokens()
+    clearAllAuthTokens()
   }
 }
 

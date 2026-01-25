@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
+import { useQueryClient } from '@tanstack/react-query'
 import { SidebarNav } from '../components/SidebarNav'
 import { logout } from '../api/authApi'
 import { setAuthScope } from '../api/http'
@@ -31,6 +32,7 @@ export function ShellLayout({
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const dialogTitleId = useId()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     document.title = documentTitle
@@ -174,6 +176,7 @@ export function ShellLayout({
                 } catch {
                   // ignore logout errors
                 } finally {
+                  queryClient.removeQueries({ queryKey: ['auth'] })
                   setUserMenuOpen(false)
                   navigate(logoutTo, { replace: true })
                 }
