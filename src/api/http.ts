@@ -51,22 +51,40 @@ function translateErrorCode(code: string) {
     'auth.invalid_credentials': '用户名或密码不正确',
     'auth.user.not_found': '账号不存在',
     'auth.password.incorrect': '密码错误',
+    'auth.user.inactive': '账号已被停用',
     'auth.user.suspended': '账号已被封禁',
+    'auth.refresh.invalid_token': '登录已过期，请重新登录',
+    'auth.refresh.revoked': '登录已过期，请重新登录',
+    'auth.refresh.user_not_found': '账号不存在',
+    'auth.sms_login.disabled': '短信登录未开启',
+    'auth.token.invalid': '登录已过期，请重新登录',
     'auth.unauthorized': '登录已过期或未登录',
     'auth.forbidden': '没有权限执行该操作',
     'user.username.duplicate': '用户名已存在',
     'user.email.duplicate': '邮箱已存在',
     'user.phone.duplicate': '电话已存在',
     'user.not_found': '未找到用户',
+    'user.ban.self': '不能封禁当前登录账号',
+    'user.ban.last_admin': '不能封禁最后一个管理员',
+    'user.password.incorrect': '原密码不正确',
+    'user.conflict.unknown': '用户信息冲突，请稍后重试',
     'patient.not_found': '未找到患者',
     'consultation.not_found': '未找到问诊记录',
+    'consultation.dialogue.stream.mode.invalid': '当前仅支持模型决策模式流式对话',
     'case.not_found': '未找到病例',
     'disease.not_found': '未找到病症',
+    'disease.name.duplicate': '病症名称已存在',
     'file.not_found': '未找到文件',
   }
   if (directMap[code]) return directMap[code]
 
-  if (code.endsWith('.duplicate')) return '信息已存在'
+  if (code.endsWith('.duplicate')) {
+    const lower = code.toLowerCase()
+    if (lower.includes('username')) return '用户名已存在'
+    if (lower.includes('phone') || lower.includes('mobile') || lower.includes('tel')) return '电话已存在'
+    if (lower.includes('email')) return '邮箱已存在'
+    return '信息已存在'
+  }
   if (code.endsWith('.not_found')) return '未找到对应资源'
   if (code.endsWith('.forbidden')) return '没有权限执行该操作'
   if (code.endsWith('.unauthorized')) return '登录已过期或未登录'
@@ -75,16 +93,103 @@ function translateErrorCode(code: string) {
   return ''
 }
 
-function resolveErrorMessage(payload: unknown, fallback: string) {
-  if (!payload || typeof payload !== 'object') return fallback
+function resolveDuplicateFieldMessage(payload: unknown) {
+  if (!payload) return ''
+  if (typeof payload === 'string') {
+    return parseDuplicateFieldFromText(payload)
+  }
+  if (typeof payload !== 'object') return ''
   const maybePayload = payload as {
-    detail?: Array<{ msg?: string; code?: string; message?: string }> | string
+    detail?:
+      | Array<{ msg?: string; code?: string; message?: string; loc?: Array<string | number> }>
+      | { code?: string; message?: string }
+      | string
     message?: string
     code?: string
   }
+  const fragments: string[] = []
+  if (typeof maybePayload.code === 'string') fragments.push(maybePayload.code)
+  if (typeof maybePayload.message === 'string') fragments.push(maybePayload.message)
+  if (typeof maybePayload.detail === 'string') fragments.push(maybePayload.detail)
+  if (
+    maybePayload.detail &&
+    typeof maybePayload.detail === 'object' &&
+    !Array.isArray(maybePayload.detail)
+  ) {
+    const detail = maybePayload.detail as { code?: string; message?: string }
+    if (typeof detail.code === 'string') fragments.push(detail.code)
+    if (typeof detail.message === 'string') fragments.push(detail.message)
+  }
+  if (Array.isArray(maybePayload.detail)) {
+    for (const item of maybePayload.detail) {
+      if (!item) continue
+      if (typeof item.code === 'string') fragments.push(item.code)
+      if (typeof item.message === 'string') fragments.push(item.message)
+      if (typeof item.msg === 'string') fragments.push(item.msg)
+      if (Array.isArray(item.loc)) {
+        const loc = item.loc.filter((value) => typeof value === 'string').join('.')
+        if (loc) fragments.push(loc)
+      }
+    }
+  }
+  if (fragments.length === 0) return ''
+  const raw = fragments.join(' ')
+  return parseDuplicateFieldFromText(raw)
+}
+
+function parseDuplicateFieldFromText(raw: string) {
+  if (!raw) return ''
+  const lower = raw.toLowerCase()
+  const isDuplicate =
+    /(duplicate|exists|exist|unique|conflict)/.test(lower) || /重复|已存在/.test(raw)
+  if (!isDuplicate) return ''
+  if (/(username|user_name|user\.name)/.test(lower) || /用户名|账号/.test(raw)) return '用户名已存在'
+  if (/(phone|mobile|tel|telephone)/.test(lower) || /手机号|电话/.test(raw)) return '电话已存在'
+  if (/(email|e-mail)/.test(lower) || /邮箱/.test(raw)) return '邮箱已存在'
+  return ''
+}
+
+function resolveErrorMessage(payload: unknown, fallback: string) {
+  if (!payload) return fallback
+  if (typeof payload === 'string') {
+    const duplicateFieldMessage = resolveDuplicateFieldMessage(payload)
+    if (duplicateFieldMessage) return duplicateFieldMessage
+    if (/[^\x00-\x7F]/.test(payload)) return payload
+    return payload
+  }
+  if (typeof payload !== 'object') return fallback
+  const maybePayload = payload as {
+    detail?:
+      | Array<{ msg?: string; code?: string; message?: string }>
+      | { code?: string; message?: string }
+      | string
+    message?: string
+    code?: string
+  }
+  const duplicateFieldMessage = resolveDuplicateFieldMessage(payload)
+  if (duplicateFieldMessage) return duplicateFieldMessage
   if (typeof maybePayload.code === 'string') {
     const translated = translateErrorCode(maybePayload.code)
     if (translated) return translated
+  }
+  if (
+    maybePayload.detail &&
+    typeof maybePayload.detail === 'object' &&
+    !Array.isArray(maybePayload.detail)
+  ) {
+    const detail = maybePayload.detail as { code?: string; message?: string }
+    if (typeof detail.code === 'string') {
+      const translated = translateErrorCode(detail.code)
+      if (translated) return translated
+    }
+    if (typeof detail.message === 'string') {
+      if (/[^\x00-\x7F]/.test(detail.message)) return detail.message
+      if (typeof detail.code === 'string') {
+        const translated = translateErrorCode(detail.code)
+        if (translated) return translated
+      }
+      return detail.message
+    }
   }
   if (typeof maybePayload.message === 'string') {
     if (/[^\x00-\x7F]/.test(maybePayload.message)) return maybePayload.message
@@ -124,6 +229,12 @@ function getStatusMessage(status: number) {
       return '未找到对应资源'
     case 409:
       return '请求冲突，请稍后重试'
+    case 410:
+      return '邮箱已存在'
+    case 411:
+      return '电话已存在'
+    case 412:
+      return '名称已存在'
     case 422:
       return '参数校验失败'
     case 429:
@@ -210,7 +321,14 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   if (!response.ok) {
     let payload: unknown = null
     try {
-      payload = await response.json()
+      const raw = await response.text()
+      if (raw) {
+        try {
+          payload = JSON.parse(raw)
+        } catch {
+          payload = raw
+        }
+      }
     } catch {
       payload = null
     }

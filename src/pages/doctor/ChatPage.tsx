@@ -28,6 +28,7 @@ import type { CaseMessage, Citation, ConsultationDraft, Disease } from '../../ty
 const lastConsultationStorageKeyBase = 'doctor:lastConsultationId'
 const buildLastConsultationKey = (userId?: string) =>
   userId ? `${lastConsultationStorageKeyBase}:${userId}` : lastConsultationStorageKeyBase
+let createConsultationPromise: Promise<string> | null = null
 
 export function ChatPage() {
   const [input, setInput] = useState('')
@@ -115,13 +116,22 @@ export function ChatPage() {
   )
 
   const requestNewConsultation = useCallback(async () => {
+    if (createConsultationPromise) {
+      const existingId = await createConsultationPromise
+      setConsultationId(existingId)
+      return
+    }
     if (createInFlightRef.current || createConsultation.isPending) return
     createInFlightRef.current = true
     try {
-      const res = await createConsultation.mutateAsync(undefined)
-      setConsultationId(res.consultationId)
+      createConsultationPromise = createConsultation
+        .mutateAsync(undefined)
+        .then((res) => res.consultationId)
+      const newId = await createConsultationPromise
+      setConsultationId(newId)
     } finally {
       createInFlightRef.current = false
+      createConsultationPromise = null
     }
   }, [createConsultation])
 

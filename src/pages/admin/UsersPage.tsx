@@ -109,6 +109,7 @@ export function UsersPage() {
   }, [filtered, pageSize, safePage])
 
   const openEdit = (user: UserSummary) => {
+    setNotice(null)
     setEditing(user)
     setDraft({
       name: user.name ?? '',
@@ -175,6 +176,7 @@ export function UsersPage() {
             <button
               type="button"
               onClick={() => {
+                setCreateNotice(null)
                 setCreateDraft({
                   role: 'doctor',
                   username: '',

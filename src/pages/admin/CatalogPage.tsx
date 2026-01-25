@@ -231,7 +231,10 @@ export function CatalogPage() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditing(item)}
+                  onClick={() => {
+                    setNotice(null)
+                    setEditing(item)
+                  }}
                   className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-soft-card hover:bg-emerald-700"
                 >
                   编辑
@@ -301,7 +304,10 @@ export function CatalogPage() {
                     <div className="flex items-center justify-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setEditing(item)}
+                        onClick={() => {
+                          setNotice(null)
+                          setEditing(item)
+                        }}
                         className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-soft-card hover:bg-emerald-700"
                       >
                         编辑
