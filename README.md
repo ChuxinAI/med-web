@@ -1,12 +1,13 @@
 # med-web 前端（医生端 + 管理端）
 
-基于 Vite + React + TypeScript + Tailwind 的问诊系统前端骨架，覆盖医生端工作台和管理端控制台，围绕“结构化问诊 + 规则优先问诊，模型兜底”场景搭建。包含导航布局、路由、后端 API 查询层、React Query 状态管理，以及登录/问诊/病症/患者的功能页。
+基于 Vite + React + TypeScript + Tailwind 的问诊系统前端骨架，覆盖医生端工作台与管理端控制台。围绕“结构化问诊 + 规则优先问诊，模型兜底”场景搭建，包含导航布局、路由、API 查询层、React Query 状态管理，以及登录/问诊/病症/患者相关页面。
 
 ## 技术栈
 - React 19 + TypeScript + React Router 7
-- TailwindCSS（定制浅色主题、玻璃态卡片）
+- TailwindCSS（浅色主题与卡片组件）
 - React Query（数据查询与缓存）
-- zod/yup 预留位（表单校验），Ant/Tailwind 友好样式
+- React Hook Form + Zod（表单与校验）
+- XLSX（病症 Excel 导入）
 
 ## 目录结构
 - `src/router.tsx`：医生端/管理端路由与入口
@@ -17,6 +18,10 @@
 - `src/api/backendApi.ts` + `src/api/queries.ts`：后端接口封装 + React Query hooks
 - `src/types.ts`：角色、问诊、建议等类型定义
 
+## 运行环境
+- Node.js：建议 20 LTS（本地构建与开发）
+- 产物：`dist/`（静态文件）
+
 ## 开发与构建
 ```bash
 npm install
@@ -26,6 +31,8 @@ npm run dev:online     # 启动 online 配置
 npm run build  # TS 检查 + 生产构建
 npm run build:sandbox  # TS 检查 + sandbox 构建
 npm run build:online   # TS 检查 + online 构建
+npm run lint   # ESLint
+npm run preview # 本地预览构建产物
 ```
 
 ## 环境配置
@@ -40,6 +47,11 @@ npm run build:online   # TS 检查 + online 构建
 - 医生端：`/doctor/login`（根目录 `/` 与 `/login` 默认跳转到这里）
 - 管理端：`/admin/login`
 
-## 后续对接提示
-- 管理端表单可接入 zod/yup 校验 + 抽屉式 CRUD。
-- 医生端工作台补充消息发送/采纳流转，模型补充内容标记来源。
+## 文档索引
+- 前后端对齐与流程梳理：`docs/frontend-backend-overview.md`
+- 后端接口与数据模型建议：`docs/backend-requirements.md`
+- 部署指南（Aliyun）：`docs/deploy-aliyun.md`
+
+## 备注
+- `VITE_API_BASE_URL` 在构建时写入，切换环境需重新构建。
+- 本项目为 SPA，部署时需配置 Nginx `try_files` 回退到 `index.html`。

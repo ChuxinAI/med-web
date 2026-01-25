@@ -62,7 +62,7 @@
 - `phone`
 - `email`
 - `note`
-- `status`: `active | banned`
+- `status`: `active | suspended`
 - `registeredAt`（可与 `createdAt` 合并）
 - `lastLoginAt`
 - `registerIp`
@@ -76,6 +76,7 @@
 - `age`（可选）
 - `birthday`（可选）
 - `region`
+- `gender`（可选）
 - `phone`
 - `email`
 - `note`
@@ -85,7 +86,7 @@
 - `id`
 - `doctorId`
 - `patientId?`（可为空：未建患者/临时问诊）
-- `status`: `open | closed`
+- `status`: `open | in_review | closed`
 - `startedAt`（建议 = createdAt）
 
 ### 4.4 Message（问诊消息）
@@ -94,13 +95,25 @@
 - `consultationId`
 - `sender`: `doctor | system | model | patientinfo`
 - `content`（纯文本）
-- `source`: `rule | rag | model`（可选：用于标注“规则/库内/模型兜底”）
+- `source`: `knowledge-base | model`（可选：用于标注“库内/模型兜底”）
 - `createdAt`
 - `citations?`: `Citation[]`
 
 `Citation`（病症条目引用）：
 - `diseaseId`
 - `diseaseName`
+（前端仅使用病症管理数据做预览，不使用文件类预览）
+
+### 4.5 Disease（病症管理条目）
+
+- `id`
+- `name`
+- `type_name`
+- `type_code`（`disease | syndrome | symptom`）
+- `symptoms`
+- `differentiation`
+- `formula`
+- `note?`
 
 ## 5. 关键业务流程与规则
 
@@ -125,9 +138,10 @@
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `POST /auth/logout`
-- `GET /me`
-- `PATCH /me`
-- `POST /me/password`
+- `POST /auth/register`
+- `GET /auth/me`
+- `PATCH /auth/me`
+- `POST /auth/me/password`
 
 ### 6.2 Admin｜用户管理
 
@@ -139,27 +153,36 @@
 - `POST /admin/users/:userId/unban`
 - `POST /admin/users/:userId/reset-password`
 
-### 6.3 Doctor｜患者
+### 6.3 Admin｜病症管理
+
+- `GET /admin/diseases?q=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
+- `POST /admin/diseases`
+- `PATCH /admin/diseases/:diseaseId`
+- `DELETE /admin/diseases/:diseaseId`
+- `POST /admin/diseases/import`（Excel 批量导入，multipart）
+
+### 6.4 Doctor｜患者
 
 - `GET /doctor/patients?q=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
 - `POST /doctor/patients`
 - `GET /doctor/patients/:patientId`
 - `PATCH /doctor/patients/:patientId`
 
-### 6.4 Doctor｜问诊（单会话）
+### 6.5 Doctor｜问诊（单会话）
 
 - `GET /doctor/consultations?q=&patientId=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
 - `POST /doctor/consultations`（可选携带 `patientId` 以“从患者发起问诊”）
 - `GET /doctor/consultations/:consultationId`
 - `GET /doctor/consultations/:consultationId/messages?page=&pageSize=`
 - `POST /doctor/consultations/:consultationId/messages`（SSE）
-- `PATCH /doctor/consultations/:consultationId/draft`（保存结构化草稿）
+- `PATCH /doctor/consultations/:consultationId`（保存结构化草稿：`patient_id` / `symptoms` / `disease` / `formula` / `note`）
 - `POST /doctor/consultations/:consultationId/close`（可选）
+- `POST /doctor/consultations/:consultationId/dialogue/stream`（SSE，`mode=model_decision`）
 SSE 约定：
 - `delta` 事件返回回复文本片段
 - `done` 事件返回结构化建议（建议沿用 `ConsultationSuggestionOut`），候选病症概率在 `done` 统一返回
 
-### 6.5 Admin｜数据统计（默认用于 `updatedAt` 筛选）
+### 6.6 Admin｜数据统计（默认用于 `updatedAt` 筛选）
 - `GET /admin/stats/consultations?q=&doctorId=&patientName=&hasCase=&page=&pageSize=&sort=updatedAt&order=&updatedFrom=&updatedTo=`
 - `GET /admin/stats/patients?q=&doctorId=&region=&page=&pageSize=&sort=updatedAt&order=&updatedFrom=&updatedTo=`
 - `GET /admin/stats/doctors?q=&org=&region=&status=&page=&pageSize=&sort=updatedAt&order=&updatedFrom=&updatedTo=`
@@ -177,4 +200,4 @@ SSE 约定：
 - `extractions.formula`：`{ name?, candidates?: string[], detail?, usageNote?, source, confidence?, citations? }`
 - `nextQuestions: string[]`
 
-其中 `citations` 的粒度仅到页码（`fileName + page`），以符合前端约束。
+其中 `citations` 建议包含 `diseaseId / diseaseName`，前端引用预览依赖病症管理数据。

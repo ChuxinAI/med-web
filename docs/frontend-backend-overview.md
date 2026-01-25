@@ -7,7 +7,7 @@
 - 前端技术栈：Vite + React + TypeScript + Tailwind + React Router + @tanstack/react-query。
 - 数据层：通过 `src/api/backendApi.ts` 对接后端 API，并由 `src/api/queries.ts` 提供 hooks。
 - 认证状态：登录页写入 access/refresh token，路由由 `AuthGate` 做鉴权守卫。
-- 存储：`localStorage` 用于保存最近一次问诊 ID（key: `doctor:lastConsultationId`）。
+- 存储：`localStorage` 保存登录态与问诊关联信息（key: `med:accessToken` / `med:refreshToken` / `med:authScope` / `doctor:lastConsultationId` + 可选 `:<userId>`），以及问诊候选缓存（`consultation-suggestion:<consultationId>`）与推理选择记录（`consultation-reasoning:<consultationId>` / `consultation-reasoning-confirmed:<consultationId>`）。
 - 核心类型：以 `src/types.ts` 为准，包含 `CaseStatus(open|in_review|closed)`、`ConsultationDraft`、`ConsultationSuggestion`、`Citation` 等。
 
 ## 2. 路由结构
@@ -55,10 +55,11 @@
 2) 问诊对话（/doctor/chat）
 - 自动创建问诊：首次进入会调用 `createConsultation()`，并缓存最后问诊 ID
 - 对话消息：`useCaseMessages()` + `useSendConsultationMessage()`
-- 病例草稿：`useConsultationDraft()` + `useUpdateConsultationDraft()`
+- 病例草稿：`useConsultationDraft()` + `useUpdateConsultationDraft()`（当前与后端对齐字段：`patient_id` / `symptoms` / `disease` / `formula` / `note`）
 - 病例结构化面板：`CaseBuilderPanel` 支持症状/病症/方剂/备注编辑、患者关联；字段状态为 `empty/suggested/confirmed/edited`
 - 候选建议：`useCaseSuggestions()` 返回 `ConsultationSuggestion`（疾病/证型/方剂候选、追问建议、置信度）
 - 引用预览：消息中的 `Citation` → `SourcePreviewModal`（来源于病症管理数据，仅展示病症详情卡片）
+- 模型决策流：`useConsultationDecisionStream()` 对接 `/doctor/consultations/{id}/dialogue/stream`，`mode=model_decision`
 
 3) 问诊详情（/doctor/consultations/:caseId）
 - 进入后渲染 `DoctorWorkspace`（对话 + 草稿侧栏）
@@ -101,9 +102,10 @@
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `POST /auth/logout`
-- `GET /me`
-- `PATCH /me`
-- `POST /me/password`
+- `POST /auth/register`
+- `GET /auth/me`
+- `PATCH /auth/me`
+- `POST /auth/me/password`
 
 ### 4.2 Admin｜用户管理
 - `GET /admin/users?q=&role=&status=&page=&pageSize=&sort=&order=&updatedFrom=&updatedTo=`
@@ -125,7 +127,7 @@
 - `POST /admin/diseases/import`（Excel 批量导入，multipart）
 
 字段对齐（`Disease`）：
-- `id, name, symptoms, formula, note?, createdAt, updatedAt`
+- `id, name, type_name, type_code, symptoms, differentiation, formula, note?, createdAt, updatedAt`
 
 ### 4.4 Admin｜统计
 - `GET /admin/stats/overview`
@@ -139,9 +141,10 @@
 - `GET /doctor/consultations/:consultationId/messages?page=&pageSize=`
 - `POST /doctor/consultations/:consultationId/messages`（SSE）
   - `GET /doctor/consultations/:consultationId/suggestions`（`ConsultationSuggestion`）
-  - `GET /doctor/consultations/:consultationId/draft`
-  - `PATCH /doctor/consultations/:consultationId/draft`
+  - `GET /doctor/consultations/:consultationId`（用于构建草稿）
+  - `PATCH /doctor/consultations/:consultationId`（更新 `patient_id` / `symptoms` / `disease` / `formula` / `note`）
   - `POST /doctor/consultations/:consultationId/close`（可选）
+  - `POST /doctor/consultations/:consultationId/dialogue/stream`（SSE，`mode=model_decision`）
 
 消息发送返回建议包含：
 - `assistantMessage`（Message）
