@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import type { Patient } from '../types'
 import { RegionSelect } from './RegionSelect'
 
+const phonePattern = /^\d{11}$/
+
 export function PatientUpsertModal({
   open,
   onClose,
@@ -34,6 +36,7 @@ export function PatientUpsertModal({
     if (!age.trim()) return false
     if (!region.trim()) return false
     if (!phone.trim()) return false
+    if (!phonePattern.test(phone.trim())) return false
     return true
   }, [age, gender, name, pending, phone, region])
 
@@ -61,6 +64,10 @@ export function PatientUpsertModal({
     }
     if (!phone.trim()) {
       setError('请输入患者电话。')
+      return
+    }
+    if (!phonePattern.test(phone.trim())) {
+      setError('电话需为 11 位数字。')
       return
     }
 

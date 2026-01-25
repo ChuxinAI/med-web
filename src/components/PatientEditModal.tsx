@@ -4,6 +4,8 @@ import type { Patient } from '../types'
 import { InlineNotice } from './InlineNotice'
 import { RegionSelect } from './RegionSelect'
 
+const phonePattern = /^\d{11}$/
+
 export function PatientEditModal({
   open,
   patient,
@@ -81,6 +83,7 @@ function PatientEditForm({
     if (!editing.age.trim()) return false
     if (!editing.region.trim()) return false
     if (!editing.phone.trim()) return false
+    if (!phonePattern.test(editing.phone.trim())) return false
     return true
   }, [editing.age, editing.gender, editing.name, editing.phone, editing.region, pending])
 
@@ -92,6 +95,7 @@ function PatientEditForm({
     if (!editing.age.trim()) return setError('请输入患者年龄。')
     if (!editing.region.trim()) return setError('请选择患者地区。')
     if (!editing.phone.trim()) return setError('请输入患者电话。')
+    if (!phonePattern.test(editing.phone.trim())) return setError('电话需为 11 位数字。')
     const ageNumber = editing.age.trim() ? Number(editing.age.trim()) : undefined
     if (editing.age.trim() && Number.isNaN(ageNumber)) return setError('年龄格式不正确。')
     setPending(true)

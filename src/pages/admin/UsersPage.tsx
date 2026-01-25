@@ -16,6 +16,8 @@ import { HorizontalScroll } from '../../components/HorizontalScroll'
 import { RegionSelect } from '../../components/RegionSelect'
 import { getCityFromRegion, parseRegionParts } from '../../lib/region'
 
+const phonePattern = /^\d{11}$/
+
 type CreateUserDraft = {
   role: 'doctor' | 'admin'
   username: string
@@ -347,6 +349,10 @@ export function UsersPage() {
               setNotice({ tone: 'error', message: '电话为必填项。' })
               return
             }
+            if (!phonePattern.test(draft.phone.trim())) {
+              setNotice({ tone: 'error', message: '电话需为 11 位数字。' })
+              return
+            }
             await updateUser.mutateAsync({
               userId: editing.id,
               patch: {
@@ -461,6 +467,10 @@ export function UsersPage() {
           }
           if (!createDraft.phone.trim()) {
             setCreateNotice({ tone: 'error', message: '电话为必填项。' })
+            return
+          }
+          if (!phonePattern.test(createDraft.phone.trim())) {
+            setCreateNotice({ tone: 'error', message: '电话需为 11 位数字。' })
             return
           }
           try {

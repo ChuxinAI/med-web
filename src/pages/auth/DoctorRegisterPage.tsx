@@ -5,6 +5,8 @@ import { setAuthScope } from '../../api/http'
 import { RegionSelect } from '../../components/RegionSelect'
 import { parseRegionParts } from '../../lib/region'
 
+const phonePattern = /^\d{11}$/
+
 export function DoctorRegisterPage() {
   const navigate = useNavigate()
   const login = useLogin()
@@ -58,6 +60,10 @@ export function DoctorRegisterPage() {
     }
     if (!form.phone.trim()) {
       setError('电话为必填项')
+      return
+    }
+    if (!phonePattern.test(form.phone.trim())) {
+      setError('电话需为 11 位数字')
       return
     }
     if (!form.password.trim()) {
