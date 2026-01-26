@@ -39,7 +39,9 @@ export function CaseBuilderPanel({
     (updater: (prev: ConsultationDraft) => ConsultationDraft) => {
       setLocalDraft((prev) => {
         const next = updater(prev)
-        onDraftChange?.(next)
+        if (next !== prev) {
+          onDraftChange?.(next)
+        }
         return next
       })
     },
@@ -53,16 +55,19 @@ export function CaseBuilderPanel({
   useEffect(() => {
     if (readOnly) return
     if (!Array.isArray(suggestedSymptoms) || suggestedSymptoms.length === 0) return
-    updateLocalDraft((prev) => {
-      const merged = mergeSymptoms(prev.symptoms, suggestedSymptoms)
-      if (merged === prev.symptoms) return prev
-      return {
+    const merged = mergeSymptoms(localDraft.symptoms, suggestedSymptoms)
+    if (merged === localDraft.symptoms) return
+    setLocalDraft((prev) => {
+      if (prev.symptoms === merged) return prev
+      const next = {
         ...prev,
         symptoms: merged,
         status: { ...prev.status, symptoms: 'suggested' },
       }
+      onDraftChange?.(next)
+      return next
     })
-  }, [readOnly, suggestedSymptoms, updateLocalDraft])
+  }, [localDraft.symptoms, onDraftChange, readOnly, suggestedSymptoms])
 
   const filteredPatients = useMemo(() => {
     const keyword = patientQuery.trim()

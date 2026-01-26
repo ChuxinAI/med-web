@@ -254,6 +254,7 @@ export function ChatPage() {
       (message) => message.sender !== 'doctor' && message.content === streamingMessage.content,
     )
     if (!matched) return
+    if (streamingMatchId === matched.id && !streamingMessage.isStreaming) return
     setStreamingMessage((prev) => {
       if (!prev) return matched
       const prevTime = Date.parse(prev.createdAt)
@@ -262,15 +263,25 @@ export function ChatPage() {
         Number.isFinite(matchedTime) && (!Number.isFinite(prevTime) || matchedTime > prevTime)
           ? matched.createdAt
           : prev.createdAt
-      return {
+      const next = {
         ...matched,
         id: prev.id,
         createdAt,
         isStreaming: false,
       }
+      if (
+        prev.id === next.id &&
+        prev.sender === next.sender &&
+        prev.content === next.content &&
+        prev.createdAt === next.createdAt &&
+        prev.isStreaming === next.isStreaming
+      ) {
+        return prev
+      }
+      return next
     })
     setStreamingMatchId(matched.id)
-  }, [messages, streamingMessage])
+  }, [messages, streamingMessage, streamingMatchId])
   useEffect(() => {
     if (streamingMessage) return
     if (!streamingMatchId) return

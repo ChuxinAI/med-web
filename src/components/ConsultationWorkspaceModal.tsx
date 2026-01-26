@@ -4,13 +4,14 @@ import {
   useCaseMessages,
   useCaseSuggestions,
   useCatalog,
+  useConsultationDecisionStream,
   useConsultationDraft,
   useCreateDoctorPatient,
   useDoctorPatients,
   useSendConsultationMessage,
   useUpdateConsultationDraft,
 } from '../api/queries'
-import type { Citation } from '../types'
+import type { Citation, CaseMessage, Disease } from '../types'
 import { Card } from './Card'
 import { CaseChatBubble } from './CaseChatBubble'
 import { CaseBuilderPanel } from './CaseBuilderPanel'
@@ -18,6 +19,7 @@ import { SourcePreviewModal } from './SourcePreviewModal'
 import { consultationGuideMessage } from '../lib/consultationGuide'
 import { ConsultationCandidatePanel } from './ConsultationCandidatePanel'
 import { dedupeSymptoms, readReasoningConfirmedSymptoms, writeReasoningConfirmedSymptoms } from '../lib/reasoningStorage'
+import { extractAssistantContent } from '../lib/consultationStream'
 
 export function ConsultationWorkspaceModal({
   open,
@@ -48,7 +50,10 @@ export function ConsultationWorkspaceModal({
   const { data: draft } = useConsultationDraft(consultationId ?? undefined)
   const updateDraft = useUpdateConsultationDraft()
   const sendMessage = useSendConsultationMessage()
+  const decisionStream = useConsultationDecisionStream()
   const [reasoningConfirmedSymptoms, setReasoningConfirmedSymptoms] = useState<string[]>([])
+  const [decisionStreamingMessage, setDecisionStreamingMessage] = useState<CaseMessage | null>(null)
+  const [decisionPending, setDecisionPending] = useState(false)
   const suggestedSymptoms = useMemo(() => {
     if (reasoningConfirmedSymptoms.length > 0) return reasoningConfirmedSymptoms
     return suggestion?.confirmedSymptoms ?? []
@@ -61,12 +66,15 @@ export function ConsultationWorkspaceModal({
   const canSend = useMemo(() => input.trim().length > 0 && !pending, [input, pending])
   const transcript = useMemo(() => {
     return (messages ?? [])
+      .concat(decisionStreamingMessage && decisionStreamingMessage.content ? [decisionStreamingMessage] : [])
       .slice()
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-  }, [messages])
+  }, [decisionStreamingMessage, messages])
 
   useEffect(() => {
     setReasoningConfirmedSymptoms([])
+    setDecisionStreamingMessage(null)
+    setDecisionPending(false)
   }, [consultationId])
 
   useEffect(() => {
@@ -88,16 +96,79 @@ export function ConsultationWorkspaceModal({
   }, [transcript])
   const latestModelId = latestModelMessage?.id ?? null
   const canShowInlineCandidatePanel = useMemo(() => {
-    if (!latestModelId) return false
+    if (!latestModelId || decisionPending) return false
     if (latestModelMessage?.content.includes('模型自主分析')) return false
     return true
-  }, [latestModelId, latestModelMessage?.content])
+  }, [decisionPending, latestModelId, latestModelMessage?.content])
   const suppressCandidatePanel = Boolean(latestModelMessage?.content.includes('模型自主分析'))
+  const handleAdoptDisease = async (disease: Disease) => {
+    if (!consultationId || readOnly || !draft) return
+    await updateDraft.mutateAsync({
+      consultationId,
+      patch: {
+        diagnosis: disease.name,
+        formulaName: disease.formula,
+        symptoms: draft.symptoms,
+        status: {
+          ...draft.status,
+          diagnosis: 'confirmed',
+          formulaName: 'confirmed',
+        },
+      },
+    })
+  }
+  const handleRequestDecision = async () => {
+    if (!consultationId || readOnly || decisionStream.isPending || decisionPending) return
+    const previousDecisionMessage = decisionStreamingMessage
+    setDecisionPending(true)
+    const streamMessage: CaseMessage = {
+      id: `decision-stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'model',
+      content: '',
+      createdAt: new Date().toISOString(),
+      isStreaming: true,
+    }
+    setDecisionStreamingMessage(streamMessage)
+    try {
+      await decisionStream.mutateAsync({
+        consultationId,
+        message: null,
+        onDelta: (delta) => {
+          if (!delta) return
+          setDecisionStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? { ...prev, content: `${prev.content}${delta}` }
+              : prev,
+          )
+        },
+        onDone: (payload) => {
+          const finalText = extractAssistantContent(payload)
+          setDecisionStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? {
+                  ...prev,
+                  content: finalText || prev.content,
+                  isStreaming: false,
+                }
+              : prev,
+          )
+        },
+        onError: () => {
+          setDecisionStreamingMessage(previousDecisionMessage ?? null)
+        },
+      })
+    } catch {
+      setDecisionStreamingMessage(previousDecisionMessage ?? null)
+    } finally {
+      setDecisionPending(false)
+    }
+  }
   const candidatePanel =
     consultationId && transcript.length > 0 && !pending && !suppressCandidatePanel ? (
       <ConsultationCandidatePanel
         suggestion={suggestion}
         catalog={catalog}
+        decisionLoading={decisionStream.isPending}
         onConfirmedSymptomsChange={(symptoms) => {
           setReasoningConfirmedSymptoms(symptoms)
           if (!consultationId || readOnly) return
@@ -105,6 +176,8 @@ export function ConsultationWorkspaceModal({
         }}
         storageKey={consultationId}
         readOnly={readOnly}
+        onRequestDecision={!readOnly ? () => void handleRequestDecision() : undefined}
+        onAdoptDisease={!readOnly ? (disease) => void handleAdoptDisease(disease) : undefined}
       />
     ) : null
 
@@ -112,7 +185,7 @@ export function ConsultationWorkspaceModal({
     if (!open) return
     if (!consultationId) return
     bottomRef.current?.scrollIntoView({ block: 'end' })
-  }, [consultationId, messages?.length, open])
+  }, [consultationId, decisionPending, decisionStreamingMessage?.content, messages?.length, open])
 
   if (!open || !consultationId) return null
   if (typeof document === 'undefined') return null
@@ -168,6 +241,13 @@ export function ConsultationWorkspaceModal({
                       />
                     ))}
                     {pending ? (
+                      <div className="flex justify-start">
+                        <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+                          正在思考...
+                        </div>
+                      </div>
+                    ) : null}
+                    {decisionPending && !decisionStreamingMessage?.content ? (
                       <div className="flex justify-start">
                         <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
                           正在思考...

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ConsultationCandidateDisease,
   ConsultationCandidateSymptomDetail,
-  ConsultationReasoningTree,
   ConsultationSuggestion,
   Disease,
 } from '../types'
@@ -35,7 +34,6 @@ export function ConsultationCandidatePanel({
   readOnly?: boolean
 }) {
   const [selectedCandidate, setSelectedCandidate] = useState<ConsultationCandidateDisease | null>(null)
-  const [currentNode, setCurrentNode] = useState<ConsultationReasoningTree | null>(null)
   const [history, setHistory] = useState<ReasoningHistoryItem[]>([])
   const [yesSymptoms, setYesSymptoms] = useState<string[]>([])
   const [noSymptoms, setNoSymptoms] = useState<string[]>([])
@@ -43,13 +41,8 @@ export function ConsultationCandidatePanel({
   const hasUserInteractedRef = useRef(false)
 
   const candidates = suggestion?.candidateDiseases ?? []
-  const reasoningTree = suggestion?.reasoningTree ?? null
   const normalizedUserSymptoms = suggestion?.normalizedUserSymptoms ?? []
   const candidateSymptomDetails = suggestion?.candidateSymptomDetails ?? []
-  const candidateIdFilter = useMemo(() => {
-    if (!currentNode?.candidateIds?.length) return null
-    return new Set(currentNode.candidateIds.map((id) => String(id)))
-  }, [currentNode?.candidateIds])
   const confirmedSymptoms = useMemo(
     () => dedupeSymptoms([...normalizedUserSymptoms, ...yesSymptoms]),
     [normalizedUserSymptoms, yesSymptoms],
@@ -80,8 +73,14 @@ export function ConsultationCandidatePanel({
           : [...detail.matchedSymptoms, ...(candidateMatchedMap.get(detail.id) ?? [])]
       const confirmed = dedupeSymptoms([...baseMatched, ...yesSymptoms])
       const yesSet = new Set(confirmed)
-      const matchedSymptoms = symptoms.filter((symptom) => yesSet.has(symptom))
-      const unmatchedSymptoms = symptoms.filter((symptom) => !yesSet.has(symptom) && !noSet.has(symptom))
+      const matchedSymptoms = mergeSymptoms(
+        detail.matchedSymptoms ?? [],
+        symptoms.filter((symptom) => yesSet.has(symptom)),
+      )
+      const computedUnmatched = symptoms.filter((symptom) => !yesSet.has(symptom) && !noSet.has(symptom))
+      const backendUnmatched =
+        (detail.unmatchedSymptoms ?? []).filter((symptom) => !yesSet.has(symptom) && !noSet.has(symptom))
+      const unmatchedSymptoms = backendUnmatched.length > 0 ? backendUnmatched : computedUnmatched
       map.set(detail.id, {
         ...detail,
         symptoms,
@@ -91,27 +90,39 @@ export function ConsultationCandidatePanel({
     })
     return map
   }, [candidateMatchedMap, candidateSymptomDetails, normalizedUserSymptoms, noSymptoms, yesSymptoms])
+  const candidateSymptomMap = useMemo(() => {
+    const map = new Map<string, string[]>()
+    candidates.forEach((candidate) => {
+      const detail = symptomDetailMap.get(candidate.id)
+      const baseSymptoms = detail?.symptoms ?? []
+      let expanded = expandSymptoms(baseSymptoms)
+      if (expanded.length === 0) {
+        const fallbackText = diseaseMap.get(candidate.id)?.symptoms ?? ''
+        expanded = expandSymptoms(fallbackText ? [fallbackText] : [])
+      }
+      map.set(candidate.id, expanded)
+    })
+    return map
+  }, [candidates, diseaseMap, symptomDetailMap])
   const filteredCandidates = useMemo(() => {
-    const source = candidateIdFilter ? candidates.filter((item) => candidateIdFilter.has(item.id)) : candidates
-    return source.slice().sort((a, b) => {
+    return candidates.slice().sort((a, b) => {
       const scoreA = resolveProbability(a, symptomDetailMap, confirmedSymptoms, diseaseMap)
       const scoreB = resolveProbability(b, symptomDetailMap, confirmedSymptoms, diseaseMap)
       if (scoreB !== scoreA) return scoreB - scoreA
       return a.name.localeCompare(b.name, 'zh-Hans-CN')
     })
-  }, [candidateIdFilter, candidates, confirmedSymptoms, diseaseMap, symptomDetailMap])
+  }, [candidates, confirmedSymptoms, diseaseMap, symptomDetailMap])
   const visibleCandidates = filteredCandidates
   const selectedSymptomDetail = selectedCandidate ? symptomDetailMap.get(selectedCandidate.id) : undefined
-  const askedSet = useMemo(
-    () => new Set([...normalizedUserSymptoms, ...yesSymptoms, ...noSymptoms]),
-    [normalizedUserSymptoms, noSymptoms, yesSymptoms],
-  )
+  const askedSet = useMemo(() => {
+    const raw = [...normalizedUserSymptoms, ...yesSymptoms, ...noSymptoms]
+    return new Set(raw.map(normalizeSymptom).filter(Boolean))
+  }, [normalizedUserSymptoms, noSymptoms, yesSymptoms])
   const fallbackAskSymptom = useMemo(
-    () => pickNextSymptom(filteredCandidates, symptomDetailMap, askedSet),
-    [askedSet, filteredCandidates, symptomDetailMap],
+    () => pickNextSymptom(candidates, candidateSymptomMap, askedSet),
+    [askedSet, candidateSymptomMap, candidates],
   )
-  const activeAskSymptom = currentNode?.askSymptom ?? fallbackAskSymptom ?? null
-  const isTreeAsk = Boolean(currentNode?.askSymptom)
+  const activeAskSymptom = fallbackAskSymptom ?? null
   const persistenceKey = storageKey ? `consultation-reasoning:${storageKey}` : null
   const baseCandidateKey = useMemo(() => {
     if (candidates.length === 0) return null
@@ -129,16 +140,14 @@ export function ConsultationCandidatePanel({
 
   useEffect(() => {
     if (!persistenceKey || !baseCandidateKey) {
-      setCurrentNode(reasoningTree)
       setHistory([])
       setYesSymptoms([])
       setNoSymptoms([])
       hasHydratedRef.current = true
       return
     }
-    const restored = restoreReasoningState(persistenceKey, reasoningTree, baseCandidateKey)
+    const restored = restoreReasoningState(persistenceKey, baseCandidateKey)
     if (restored) {
-      setCurrentNode(restored.currentNode)
       setHistory(restored.history)
       setYesSymptoms(restored.yesSymptoms)
       setNoSymptoms(restored.noSymptoms)
@@ -150,12 +159,11 @@ export function ConsultationCandidatePanel({
       storedConfirmed.length > 0
         ? storedConfirmed.filter((item) => !normalizedUserSymptoms.includes(item))
         : []
-    setCurrentNode(reasoningTree)
     setHistory([])
     setYesSymptoms(seededYes)
     setNoSymptoms([])
     hasHydratedRef.current = true
-  }, [baseCandidateKey, normalizedUserSymptoms, persistenceKey, reasoningTree, storageKey])
+  }, [baseCandidateKey, normalizedUserSymptoms, persistenceKey, storageKey])
 
   useEffect(() => {
     if (!hasHydratedRef.current) return
@@ -175,14 +183,7 @@ export function ConsultationCandidatePanel({
     if (!activeAskSymptom) return
     hasUserInteractedRef.current = true
     const symptom = activeAskSymptom
-    if (isTreeAsk && currentNode?.askSymptom) {
-      const next = answer === 'yes' ? currentNode.yes : currentNode.no
-      if (!next) return
-      setHistory((prev) => [...prev, { node: currentNode, answer, symptom, mode: 'tree' }])
-      setCurrentNode(next)
-    } else {
-      setHistory((prev) => [...prev, { node: currentNode, answer, symptom, mode: 'fallback' }])
-    }
+    setHistory((prev) => [...prev, { answer, symptom }])
     if (answer === 'yes') {
       setYesSymptoms((prev) => [...prev, symptom])
     } else {
@@ -196,7 +197,6 @@ export function ConsultationCandidatePanel({
     setHistory((prev) => {
       if (prev.length === 0) return prev
       const last = prev[prev.length - 1]
-      setCurrentNode(last.node ?? null)
       if (last.answer === 'yes') {
         setYesSymptoms((items) => removeLast(items, last.symptom))
       } else {
@@ -222,7 +222,9 @@ export function ConsultationCandidatePanel({
               key={`${item.id}-${item.name}`}
               type="button"
               onClick={() => setSelectedCandidate(item)}
-              className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700 transition hover:border-primary-200 hover:text-primary-700"
+              className={resolveCandidateClass(
+                resolveProbability(item, symptomDetailMap, confirmedSymptoms, diseaseMap),
+              )}
             >
               {item.name}{' '}
               {formatProbability(resolveProbability(item, symptomDetailMap, confirmedSymptoms, diseaseMap))}
@@ -233,12 +235,12 @@ export function ConsultationCandidatePanel({
         <div className="text-xs text-slate-500">未检索到合适的候选病症</div>
       ) : null}
 
-      {!candidateLoading && (currentNode || fallbackAskSymptom) ? (
+      {!candidateLoading && candidates.length > 0 ? (
         <div className="mt-2 rounded-lg border border-slate-200/60 bg-white/70 px-2 py-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-semibold text-slate-500">推理选择</span>
             <div className="flex items-center gap-2 text-[11px] text-slate-400">
-              <span>候选数 {filteredCandidates.length}</span>
+              <span>候选数 {candidates.length}</span>
               <button
                 type="button"
                 onClick={handleBack}
@@ -255,7 +257,7 @@ export function ConsultationCandidatePanel({
               <button
                 type="button"
                 onClick={() => handleAnswer('yes')}
-                disabled={readOnly || (isTreeAsk && !currentNode?.yes)}
+                disabled={readOnly}
                 className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 disabled:opacity-50"
               >
                 是
@@ -263,7 +265,7 @@ export function ConsultationCandidatePanel({
               <button
                 type="button"
                 onClick={() => handleAnswer('no')}
-                disabled={readOnly || (isTreeAsk && !currentNode?.no)}
+                disabled={readOnly}
                 className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 disabled:opacity-50"
               >
                 否
@@ -317,8 +319,8 @@ export function ConsultationCandidatePanel({
 
 function formatProbability(value?: number) {
   if (value == null || Number.isNaN(value)) return '—'
-  const rounded = Math.round(value)
-  return `${rounded}%`
+  const floored = Math.floor(value)
+  return `${floored}%`
 }
 
 function resolveProbability(
@@ -354,16 +356,44 @@ function removeLast(list: string[], value: string) {
 
 function pickNextSymptom(
   candidates: ConsultationCandidateDisease[],
-  symptomDetailMap: Map<string, CandidateSymptomDetailWithPartial>,
+  candidateSymptomMap: Map<string, string[]>,
   askedSet: Set<string>,
 ) {
-  for (const candidate of candidates) {
-    const detail = symptomDetailMap.get(candidate.id)
-    if (!detail) continue
-    const next = detail.unmatchedSymptoms.find((symptom) => !askedSet.has(symptom))
-    if (next) return next
+  const totalCandidates = candidates.length
+  if (totalCandidates === 0) return null
+  const symptomCounts = new Map<string, number>()
+  candidates.forEach((candidate) => {
+    const symptoms = candidateSymptomMap.get(candidate.id) ?? []
+    symptoms.forEach((symptom) => {
+      if (!symptom || askedSet.has(symptom)) return
+      symptomCounts.set(symptom, (symptomCounts.get(symptom) ?? 0) + 1)
+    })
+  })
+  let best: string | null = null
+  let bestScore = -1
+  let bestCount = -1
+  for (const [symptom, count] of symptomCounts.entries()) {
+    const score = Math.min(count, totalCandidates - count)
+    if (score > bestScore || (score === bestScore && count > bestCount)) {
+      best = symptom
+      bestScore = score
+      bestCount = count
+    }
   }
-  return null
+  return best
+}
+
+function resolveCandidateClass(probability?: number) {
+  if (probability == null || Number.isNaN(probability)) {
+    return 'rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700 transition hover:border-primary-200 hover:text-primary-700'
+  }
+  if (probability >= 80) {
+    return 'rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 transition hover:border-emerald-300'
+  }
+  if (probability >= 60) {
+    return 'rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-700 transition hover:border-amber-300'
+  }
+  return 'rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700 transition hover:border-primary-200 hover:text-primary-700'
 }
 
 function resolveSymptomMatchScore(candidateSymptom: string, userSymptoms: string[]) {
@@ -459,15 +489,13 @@ function dedupeSymptoms(items: string[]) {
 }
 
 type ReasoningHistoryItem = {
-  node: ConsultationReasoningTree | null
   answer: 'yes' | 'no'
   symptom: string
-  mode: 'tree' | 'fallback'
 }
 
 type ReasoningSnapshot = {
   baseCandidateKey: string
-  answers: Array<Pick<ReasoningHistoryItem, 'answer' | 'symptom' | 'mode'>>
+  answers: Array<Pick<ReasoningHistoryItem, 'answer' | 'symptom'>>
 }
 
 function persistReasoningState(
@@ -478,7 +506,7 @@ function persistReasoningState(
   if (typeof window === 'undefined') return
   const snapshot: ReasoningSnapshot = {
     baseCandidateKey,
-    answers: history.map((item) => ({ answer: item.answer, symptom: item.symptom, mode: item.mode })),
+    answers: history.map((item) => ({ answer: item.answer, symptom: item.symptom })),
   }
   try {
     window.localStorage.setItem(key, JSON.stringify(snapshot))
@@ -489,7 +517,6 @@ function persistReasoningState(
 
 function restoreReasoningState(
   key: string,
-  reasoningTree: ConsultationReasoningTree | null,
   baseCandidateKey: string,
 ) {
   if (typeof window === 'undefined') return null
@@ -498,55 +525,26 @@ function restoreReasoningState(
   try {
     const snapshot = JSON.parse(raw) as ReasoningSnapshot
     if (!snapshot || !Array.isArray(snapshot.answers) || snapshot.answers.length === 0) return null
-    const forceFallback = snapshot.baseCandidateKey !== baseCandidateKey || !reasoningTree
-    return applyReasoningAnswers(reasoningTree, snapshot.answers, forceFallback)
+    if (snapshot.baseCandidateKey !== baseCandidateKey) {
+      window.localStorage.removeItem(key)
+      return null
+    }
+    return applyReasoningAnswers(snapshot.answers)
   } catch {
     return null
   }
 }
 
 function applyReasoningAnswers(
-  reasoningTree: ConsultationReasoningTree | null,
-  answers: Array<Pick<ReasoningHistoryItem, 'answer' | 'symptom' | 'mode'>>,
-  forceFallback = false,
+  answers: Array<Pick<ReasoningHistoryItem, 'answer' | 'symptom'>>,
 ) {
-  let currentNode: ConsultationReasoningTree | null = forceFallback ? null : reasoningTree
   const history: ReasoningHistoryItem[] = []
   const yesSymptoms: string[] = []
   const noSymptoms: string[] = []
-  let allowTree = !forceFallback
   for (const answer of answers) {
-    if (answer.mode === 'tree' && allowTree) {
-      if (!currentNode || currentNode.askSymptom !== answer.symptom) {
-        allowTree = false
-        currentNode = null
-      } else {
-        const next = answer.answer === 'yes' ? currentNode.yes : currentNode.no
-        if (!next) {
-          allowTree = false
-          currentNode = null
-        } else {
-          history.push({
-            node: currentNode,
-            answer: answer.answer,
-            symptom: answer.symptom,
-            mode: 'tree',
-          })
-          currentNode = next
-          if (answer.answer === 'yes') {
-            yesSymptoms.push(answer.symptom)
-          } else {
-            noSymptoms.push(answer.symptom)
-          }
-          continue
-        }
-      }
-    }
     history.push({
-      node: currentNode,
       answer: answer.answer,
       symptom: answer.symptom,
-      mode: 'fallback',
     })
     if (answer.answer === 'yes') {
       yesSymptoms.push(answer.symptom)
@@ -555,7 +553,6 @@ function applyReasoningAnswers(
     }
   }
   return {
-    currentNode,
     history,
     yesSymptoms,
     noSymptoms,
