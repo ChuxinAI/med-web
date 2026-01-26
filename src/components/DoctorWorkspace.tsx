@@ -35,6 +35,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
 
   const [optimisticMessages, setOptimisticMessages] = useState<CaseMessage[]>([])
   const [streamingMessage, setStreamingMessage] = useState<CaseMessage | null>(null)
+  const [streamingMatchId, setStreamingMatchId] = useState<string | null>(null)
   const [decisionStreamingMessage, setDecisionStreamingMessage] = useState<CaseMessage | null>(null)
   const [candidatePending, setCandidatePending] = useState(false)
   const [decisionPending, setDecisionPending] = useState(false)
@@ -46,6 +47,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   useEffect(() => {
     setOptimisticMessages([])
     setStreamingMessage(null)
+    setStreamingMatchId(null)
     setDecisionStreamingMessage(null)
     setCandidatePending(false)
     setDecisionPending(false)
@@ -99,13 +101,32 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
 
   useEffect(() => {
     if (!streamingMessage || !messages || messages.length === 0) return
-    const matched = messages.some(
+    const matched = messages.find(
       (message) => message.sender !== 'doctor' && message.content === streamingMessage.content,
     )
-    if (matched) {
-      setStreamingMessage(null)
-    }
+    if (!matched) return
+    setStreamingMessage((prev) => {
+      if (!prev) return matched
+      const prevTime = Date.parse(prev.createdAt)
+      const matchedTime = Date.parse(matched.createdAt)
+      const createdAt =
+        Number.isFinite(matchedTime) && (!Number.isFinite(prevTime) || matchedTime > prevTime)
+          ? matched.createdAt
+          : prev.createdAt
+      return {
+        ...matched,
+        id: prev.id,
+        createdAt,
+        isStreaming: false,
+      }
+    })
+    setStreamingMatchId(matched.id)
   }, [messages, streamingMessage])
+  useEffect(() => {
+    if (streamingMessage) return
+    if (!streamingMatchId) return
+    setStreamingMatchId(null)
+  }, [streamingMatchId, streamingMessage])
 
   useEffect(() => {
     if (!candidatePending) return
@@ -135,6 +156,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   const groupedMessages = useMemo(
     () =>
       ((messages ?? [])
+        .filter((message) => !streamingMatchId || message.id !== streamingMatchId)
         .concat(optimisticMessages)
         .concat(streamingMessage && streamingMessage.content ? [streamingMessage] : [])
         .concat(decisionStreamingMessage && decisionStreamingMessage.content ? [decisionStreamingMessage] : [])
@@ -150,7 +172,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
           return a.index - b.index
         })
         .map(({ message }) => message)),
-    [messages, optimisticMessages, streamingMessage, decisionStreamingMessage],
+    [messages, optimisticMessages, streamingMessage, decisionStreamingMessage, streamingMatchId],
   )
 
   const latestModelMessage = useMemo(() => {
@@ -201,6 +223,29 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
     if (!activeId) return
     const content = input.trim()
     if (!content) return
+    const tempMessage: CaseMessage = {
+      id: `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'doctor',
+      content,
+      createdAt: new Date().toISOString(),
+    }
+    setOptimisticMessages((prev) => [...prev, tempMessage])
+    const tempTimestamp = Date.parse(tempMessage.createdAt)
+    const streamCreatedAt = Number.isFinite(tempTimestamp)
+      ? new Date(tempTimestamp + 1).toISOString()
+      : new Date().toISOString()
+    const streamMessage: CaseMessage = {
+      id: `stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'model',
+      content: '',
+      createdAt: streamCreatedAt,
+      isStreaming: true,
+    }
+    setStreamingMessage(streamMessage)
+    setStreamingMatchId(null)
+    setInput('')
+    candidateSnapshotRef.current = suggestion ?? null
+    setCandidatePending(true)
     const draftSnapshot = draftSnapshotRef.current
     if (draftSnapshot) {
       try {
@@ -218,27 +263,13 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
           },
         })
       } catch {
+        setOptimisticMessages((prev) => prev.filter((message) => message.id !== tempMessage.id))
+        setStreamingMessage(null)
+        setStreamingMatchId(null)
+        setCandidatePending(false)
         return
       }
     }
-    const tempMessage: CaseMessage = {
-      id: `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      sender: 'doctor',
-      content,
-      createdAt: new Date().toISOString(),
-    }
-    setOptimisticMessages((prev) => [...prev, tempMessage])
-    const streamMessage: CaseMessage = {
-      id: `stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      sender: 'model',
-      content: '',
-      createdAt: new Date().toISOString(),
-      isStreaming: true,
-    }
-    setStreamingMessage(streamMessage)
-    setInput('')
-    candidateSnapshotRef.current = suggestion ?? null
-    setCandidatePending(true)
     try {
       await sendMessage.mutateAsync({
         consultationId: activeId,
@@ -265,12 +296,14 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
         },
         onError: () => {
           setStreamingMessage(null)
+          setStreamingMatchId(null)
           setCandidatePending(false)
         },
       })
     } catch {
       setOptimisticMessages((prev) => prev.filter((message) => message.id !== tempMessage.id))
       setStreamingMessage(null)
+      setStreamingMatchId(null)
       setCandidatePending(false)
     }
   }
@@ -433,7 +466,6 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
                   }
                 />
               ))}
-              {!canShowInlineCandidatePanel && suggestion ? candidatePanel : null}
               {decisionPending && !decisionStreamingMessage?.content ? (
                 <div className="rounded-2xl border border-slate-100 bg-white/80 p-3 text-sm text-slate-600 shadow-sm">
                   <span className="inline-flex items-center">

@@ -38,6 +38,7 @@ export function ChatPage() {
   const [casePanelOpen, setCasePanelOpen] = useState(false)
   const [optimisticMessages, setOptimisticMessages] = useState<CaseMessage[]>([])
   const [streamingMessage, setStreamingMessage] = useState<CaseMessage | null>(null)
+  const [streamingMatchId, setStreamingMatchId] = useState<string | null>(null)
   const [decisionStreamingMessage, setDecisionStreamingMessage] = useState<CaseMessage | null>(null)
   const [candidatePending, setCandidatePending] = useState(false)
   const [decisionPending, setDecisionPending] = useState(false)
@@ -82,6 +83,7 @@ export function ChatPage() {
   useEffect(() => {
     setOptimisticMessages([])
     setStreamingMessage(null)
+    setStreamingMatchId(null)
     setDecisionStreamingMessage(null)
     setCandidatePending(false)
     setDecisionPending(false)
@@ -183,6 +185,7 @@ export function ChatPage() {
   const canSend = useMemo(() => input.trim().length > 0 && !pending, [input, pending])
   const transcript = useMemo(() => {
     const items = (messages ?? [])
+      .filter((message) => !streamingMatchId || message.id !== streamingMatchId)
       .concat(optimisticMessages)
       .concat(streamingMessage && streamingMessage.content ? [streamingMessage] : [])
       .concat(decisionStreamingMessage && decisionStreamingMessage.content ? [decisionStreamingMessage] : [])
@@ -199,7 +202,7 @@ export function ChatPage() {
         return a.index - b.index
       })
       .map(({ message }) => message)
-  }, [messages, optimisticMessages, streamingMessage, decisionStreamingMessage])
+  }, [messages, optimisticMessages, streamingMessage, decisionStreamingMessage, streamingMatchId])
 
   const latestModelMessage = useMemo(() => {
     for (let i = transcript.length - 1; i >= 0; i -= 1) {
@@ -247,13 +250,32 @@ export function ChatPage() {
 
   useEffect(() => {
     if (!streamingMessage || !messages || messages.length === 0) return
-    const matched = messages.some(
+    const matched = messages.find(
       (message) => message.sender !== 'doctor' && message.content === streamingMessage.content,
     )
-    if (matched) {
-      setStreamingMessage(null)
-    }
+    if (!matched) return
+    setStreamingMessage((prev) => {
+      if (!prev) return matched
+      const prevTime = Date.parse(prev.createdAt)
+      const matchedTime = Date.parse(matched.createdAt)
+      const createdAt =
+        Number.isFinite(matchedTime) && (!Number.isFinite(prevTime) || matchedTime > prevTime)
+          ? matched.createdAt
+          : prev.createdAt
+      return {
+        ...matched,
+        id: prev.id,
+        createdAt,
+        isStreaming: false,
+      }
+    })
+    setStreamingMatchId(matched.id)
   }, [messages, streamingMessage])
+  useEffect(() => {
+    if (streamingMessage) return
+    if (!streamingMatchId) return
+    setStreamingMatchId(null)
+  }, [streamingMatchId, streamingMessage])
 
   const suggestedSymptoms = useMemo(() => {
     if (reasoningConfirmedSymptoms.length > 0) return reasoningConfirmedSymptoms
@@ -301,6 +323,30 @@ export function ChatPage() {
     const content = input.trim()
     if (!content || pending) return
     if (!consultationId) return
+    const tempMessage: CaseMessage = {
+      id: `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'doctor',
+      content,
+      createdAt: new Date().toISOString(),
+    }
+    setOptimisticMessages((prev) => [...prev, tempMessage])
+    const tempTimestamp = Date.parse(tempMessage.createdAt)
+    const streamCreatedAt = Number.isFinite(tempTimestamp)
+      ? new Date(tempTimestamp + 1).toISOString()
+      : new Date().toISOString()
+    const streamMessage: CaseMessage = {
+      id: `stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'model',
+      content: '',
+      createdAt: streamCreatedAt,
+      isStreaming: true,
+    }
+    setStreamingMessage(streamMessage)
+    setStreamingMatchId(null)
+    setInput('')
+    candidateSnapshotRef.current = suggestion ?? null
+    setCandidatePending(true)
+    setPending(true)
     const draftSnapshot = draftSnapshotRef.current
     if (draftSnapshot) {
       try {
@@ -318,29 +364,14 @@ export function ChatPage() {
           },
         })
       } catch {
+        setOptimisticMessages((prev) => prev.filter((message) => message.id !== tempMessage.id))
+        setStreamingMessage(null)
+        setStreamingMatchId(null)
+        setCandidatePending(false)
+        setPending(false)
         return
       }
     }
-
-    const tempMessage: CaseMessage = {
-      id: `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      sender: 'doctor',
-      content,
-      createdAt: new Date().toISOString(),
-    }
-    setOptimisticMessages((prev) => [...prev, tempMessage])
-    const streamMessage: CaseMessage = {
-      id: `stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      sender: 'model',
-      content: '',
-      createdAt: new Date().toISOString(),
-      isStreaming: true,
-    }
-    setStreamingMessage(streamMessage)
-    setInput('')
-    candidateSnapshotRef.current = suggestion ?? null
-    setCandidatePending(true)
-    setPending(true)
     try {
       await sendMessage.mutateAsync({
         consultationId,
@@ -367,12 +398,14 @@ export function ChatPage() {
         },
         onError: () => {
           setStreamingMessage(null)
+          setStreamingMatchId(null)
           setCandidatePending(false)
         },
       })
     } catch {
       setOptimisticMessages((prev) => prev.filter((message) => message.id !== tempMessage.id))
       setStreamingMessage(null)
+      setStreamingMatchId(null)
       setCandidatePending(false)
     } finally {
       setPending(false)
@@ -550,7 +583,6 @@ export function ChatPage() {
                     }
                   />
                 ))}
-                {!canShowInlineCandidatePanel && suggestion ? candidatePanel : null}
                 {pending && !streamingMessage?.content ? (
                   <div className="flex justify-start">
                     <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">

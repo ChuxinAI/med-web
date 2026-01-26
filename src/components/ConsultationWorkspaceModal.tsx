@@ -167,7 +167,6 @@ export function ConsultationWorkspaceModal({
                         }
                       />
                     ))}
-                    {candidatePanel && !canShowInlineCandidatePanel ? candidatePanel : null}
                     {pending ? (
                       <div className="flex justify-start">
                         <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
