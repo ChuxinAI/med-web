@@ -172,11 +172,11 @@ export function ShellLayout({
               onClick={async () => {
                 setAuthScope(authScope)
                 try {
-                  await logout()
+                  await logout(authScope)
                 } catch {
                   // ignore logout errors
                 } finally {
-                  queryClient.removeQueries({ queryKey: ['auth'] })
+                  queryClient.removeQueries({ queryKey: ['auth', 'me', authScope] })
                   setUserMenuOpen(false)
                   navigate(logoutTo, { replace: true })
                 }

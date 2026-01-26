@@ -95,7 +95,7 @@ export function DoctorRegisterPage() {
         city: regionParts.city,
         county: regionParts.county,
       })
-      await login.mutateAsync({ identifier: form.username.trim(), password: form.password })
+      await login.mutateAsync({ identifier: form.username.trim(), password: form.password, scope: 'doctor' })
       navigate('/doctor/chat')
     } catch (err) {
       setError(err instanceof Error ? err.message : '注册失败')

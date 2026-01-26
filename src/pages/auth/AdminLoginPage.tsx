@@ -21,7 +21,7 @@ export function AdminLoginPage() {
     setError(null)
     try {
       setAuthScope('admin')
-      await login.mutateAsync({ identifier: username.trim(), password })
+      await login.mutateAsync({ identifier: username.trim(), password, scope: 'admin' })
       const me = await fetchCurrentUser('admin')
       navigate(me.role === 'doctor' ? '/doctor/chat' : '/admin/users')
     } catch (err) {

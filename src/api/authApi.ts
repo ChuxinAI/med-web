@@ -1,19 +1,21 @@
 import type { UserSummary } from '../types'
-import { apiRequest, clearAllAuthTokens, getRefreshToken, setAuthScope, setAuthTokens } from './http'
+import { apiRequest, clearAuthTokens, getRefreshToken, setAuthScope, setAuthTokens } from './http'
 import type { TokenResponseDto, UserSummaryDto } from './backendTypes'
 import { toUserSummary } from './backendMappers'
 
-export async function loginWithCredentials(identifier: string, password: string) {
+export async function loginWithCredentials(identifier: string, password: string, scope: 'doctor' | 'admin') {
+  setAuthScope(scope)
   const token = await apiRequest<TokenResponseDto>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ identifier, password }),
   })
-  setAuthTokens(token.access_token, token.refresh_token)
+  setAuthTokens(token.access_token, token.refresh_token, scope)
   return token
 }
 
-export async function logout(refreshToken?: string) {
-  const token = refreshToken ?? getRefreshToken()
+export async function logout(scope: 'doctor' | 'admin', refreshToken?: string) {
+  setAuthScope(scope)
+  const token = refreshToken ?? getRefreshToken(scope)
   try {
     if (token) {
       await apiRequest('/auth/logout', {
@@ -22,7 +24,7 @@ export async function logout(refreshToken?: string) {
       })
     }
   } finally {
-    clearAllAuthTokens()
+    clearAuthTokens(scope)
   }
 }
 

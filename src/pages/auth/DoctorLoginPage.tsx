@@ -21,7 +21,7 @@ export function DoctorLoginPage() {
     setError(null)
     try {
       setAuthScope('doctor')
-      await login.mutateAsync({ identifier: username.trim(), password })
+      await login.mutateAsync({ identifier: username.trim(), password, scope: 'doctor' })
       const me = await fetchCurrentUser('doctor')
       navigate(me.role === 'admin' ? '/admin/users' : '/doctor/chat')
     } catch (err) {

@@ -46,8 +46,8 @@ import { isSuggestionMeaningful, readCachedSuggestion, writeCachedSuggestion } f
 
 export const useLogin = () =>
   useMutation({
-    mutationFn: (args: { identifier: string; password: string }) =>
-      loginWithCredentials(args.identifier, args.password),
+    mutationFn: (args: { identifier: string; password: string; scope: 'doctor' | 'admin' }) =>
+      loginWithCredentials(args.identifier, args.password, args.scope),
   })
 
 export const useCurrentUser = (scope?: 'doctor' | 'admin') => {
