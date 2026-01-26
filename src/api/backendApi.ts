@@ -19,6 +19,7 @@ import type {
   ConsultationSuggestionDto,
   ConsultationSummaryDto,
   DiseaseDto,
+  PageMetaDto,
   PaginatedResponseDto,
   PatientSummaryDto,
   UserSummaryDto,
@@ -454,6 +455,25 @@ export async function fetchDiseases(): Promise<Disease[]> {
     '/admin/diseases?page=1&pageSize=200',
   )
   return response.items.map(toDisease)
+}
+
+export async function fetchDiseasesPage(input: {
+  page: number
+  pageSize: number
+  q?: string
+  type?: string
+}): Promise<{ items: Disease[]; meta: PageMetaDto }> {
+  const params = new URLSearchParams()
+  params.set('page', String(input.page))
+  params.set('pageSize', String(input.pageSize))
+  const keyword = input.q?.trim()
+  if (keyword) params.set('q', keyword)
+  if (input.type) params.set('type', input.type)
+  const response = await apiRequest<PaginatedResponseDto<DiseaseDto>>(`/admin/diseases?${params.toString()}`)
+  return {
+    items: response.items.map(toDisease),
+    meta: response.meta,
+  }
 }
 
 export async function createDisease(

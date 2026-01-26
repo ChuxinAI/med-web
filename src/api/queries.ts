@@ -15,6 +15,7 @@ import {
   fetchCatalog,
   fetchConsultationDraft,
   fetchDiseases,
+  fetchDiseasesPage,
   fetchDoctorCases,
   fetchDoctorPatients,
   fetchPatientDetails,
@@ -193,6 +194,9 @@ export const useCatalog = () =>
 
 export const useDiseases = () =>
   useQuery({ queryKey: ['admin', 'diseases'], queryFn: fetchDiseases })
+
+export const useDiseasesPage = (params: Parameters<typeof fetchDiseasesPage>[0]) =>
+  useQuery({ queryKey: ['admin', 'diseases', params], queryFn: () => fetchDiseasesPage(params) })
 
 export const useCreateDisease = () => {
   const queryClient = useQueryClient()

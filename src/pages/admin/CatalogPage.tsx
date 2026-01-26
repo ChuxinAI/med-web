@@ -1,6 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCreateDisease, useDeleteDisease, useDiseases, useImportDiseases, useUpdateDisease } from '../../api/queries'
+import {
+  useCreateDisease,
+  useDeleteDisease,
+  useDiseasesPage,
+  useImportDiseases,
+  useUpdateDisease,
+} from '../../api/queries'
 import { Card } from '../../components/Card'
 import { CreatedAtSortToggle } from '../../components/CreatedAtSortToggle'
 import { DiseaseEditModal } from '../../components/DiseaseEditModal'
@@ -9,7 +15,6 @@ import { TablePagination } from '../../components/TablePagination'
 import type { Disease } from '../../types'
 
 export function CatalogPage() {
-  const { data: diseases } = useDiseases()
   const createDisease = useCreateDisease()
   const updateDisease = useUpdateDisease()
   const deleteDisease = useDeleteDisease()
@@ -57,57 +62,46 @@ export function CatalogPage() {
   }
 
   const categoryOptions = [
-    { value: 'disease', label: '疾病' },
-    { value: 'syndrome', label: '症候' },
-    { value: 'symptom', label: '症状' },
+    { value: '1', label: '疾病' },
+    { value: '2', label: '症候' },
+    { value: '3', label: '症状' },
   ]
   const typeLabelMap = useMemo<Record<string, string>>(() => {
-    const base = categoryOptions.reduce<Record<string, string>>((acc, item) => {
-      acc[item.value] = item.label
-      return acc
-    }, {})
     return {
-      ...base,
       '1': '疾病',
       '2': '症候',
       '3': '症状',
+      disease: '疾病',
+      syndrome: '症候',
+      symptom: '症状',
     }
   }, [])
   const getTypeLabel = (value: string) => typeLabelMap[value] ?? value
 
-  const filtered = useMemo(() => {
-    const keyword = q.trim()
-    return (diseases ?? [])
-      .filter((item) => {
-        if (category && item.typeCode !== category) return false
-        if (!keyword) return true
-        return [
-          item.id,
-          item.name,
-          item.typeName,
-          item.typeCode,
-          item.symptoms,
-          item.differentiation,
-          item.formula,
-          item.note,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .includes(keyword)
-      })
-      .sort((a, b) => {
-        const dir = order === 'asc' ? 1 : -1
-        return (a.createdAt > b.createdAt ? 1 : -1) * dir
-      })
-  }, [diseases, order, q])
-
-  const total = filtered.length
-  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const diseaseQuery = useDiseasesPage({
+    page,
+    pageSize,
+    q,
+    type: category || undefined,
+  })
+  const diseases = diseaseQuery.data?.items ?? []
+  const total = diseaseQuery.data?.meta.total ?? 0
+  const effectivePageSize = diseaseQuery.data?.meta.page_size ?? pageSize
+  const pageCount = Math.max(1, Math.ceil(total / effectivePageSize))
   const safePage = Math.min(page, pageCount)
-  const pageItems = useMemo(
-    () => filtered.slice((safePage - 1) * pageSize, (safePage - 1) * pageSize + pageSize),
-    [filtered, pageSize, safePage],
-  )
+  const pageItems = useMemo(() => {
+    const items = [...diseases]
+    items.sort((a, b) => {
+      const dir = order === 'asc' ? 1 : -1
+      return (a.createdAt > b.createdAt ? 1 : -1) * dir
+    })
+    return items
+  }, [diseases, order])
+
+  useEffect(() => {
+    if (!diseaseQuery.data?.meta) return
+    if (page !== safePage) setPage(safePage)
+  }, [diseaseQuery.data?.meta, page, safePage])
 
   return (
     <>
@@ -115,91 +109,91 @@ export function CatalogPage() {
         title="病症管理"
         action={
           <div className="flex flex-wrap items-center gap-2">
-          <input
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value)
-              setPage(1)
-            }}
-            placeholder="检索：名称/类型/症状/鉴别/方剂/备注/ID"
-            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-72"
-          />
-          <select
-            value={category}
-            onChange={(e) => {
-              setCategory(e.target.value)
-              setPage(1)
-            }}
-            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-40"
-          >
-            <option value="">全部类别</option>
-            {categoryOptions.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <CreatedAtSortToggle
-            order={order}
-            onToggle={() => {
-              setOrder((p) => (p === 'asc' ? 'desc' : 'asc'))
-              setPage(1)
-            }}
-          />
-          <input
-            id={fileInputId}
-            type="file"
-            accept=".xlsx,.xls"
-            disabled={importing}
-            className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-              setNotice(null)
-              setImporting(true)
-              try {
-                const result = await importDiseases.mutateAsync({ file })
-                setNotice({
-                  tone: 'success',
-                  message: `已导入 ${result.imported} 条，跳过 ${result.skipped} 条。`,
-                })
-                setImportDetails(result.skippedRows.length > 0 ? result.skippedRows : null)
-              } catch (error) {
-                setNotice({
-                  tone: 'error',
-                  message: error instanceof Error ? error.message : '导入失败',
-                })
-                setImportDetails(null)
-              } finally {
-                setImporting(false)
-                e.currentTarget.value = ''
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setNotice(null)
-              setCreateOpen(true)
-            }}
-            className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-emerald-700 sm:w-auto"
-          >
-            新增病症
-          </button>
-          <label
-            htmlFor={fileInputId}
-            className={`inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-emerald-700 sm:w-auto ${
-              importing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-            }`}
-          >
-            批量导入
-          </label>
-          <a href="/example.xlsx" download className="text-xs text-slate-500 hover:text-slate-700">
-            下载示例
-          </a>
-        </div>
-      }
-    >
+            <input
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value)
+                setPage(1)
+              }}
+              placeholder="检索：名称/类型/症状/鉴别/方剂/备注/ID"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-72"
+            />
+            <select
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value)
+                setPage(1)
+              }}
+              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-40"
+            >
+              <option value="">全部类别</option>
+              {categoryOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <CreatedAtSortToggle
+              order={order}
+              onToggle={() => {
+                setOrder((p) => (p === 'asc' ? 'desc' : 'asc'))
+                setPage(1)
+              }}
+            />
+            <input
+              id={fileInputId}
+              type="file"
+              accept=".xlsx,.xls"
+              disabled={importing}
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setNotice(null)
+                setImporting(true)
+                try {
+                  const result = await importDiseases.mutateAsync({ file })
+                  setNotice({
+                    tone: 'success',
+                    message: `已导入 ${result.imported} 条，跳过 ${result.skipped} 条。`,
+                  })
+                  setImportDetails(result.skippedRows.length > 0 ? result.skippedRows : null)
+                } catch (error) {
+                  setNotice({
+                    tone: 'error',
+                    message: error instanceof Error ? error.message : '导入失败',
+                  })
+                  setImportDetails(null)
+                } finally {
+                  setImporting(false)
+                  e.currentTarget.value = ''
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setNotice(null)
+                setCreateOpen(true)
+              }}
+              className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-emerald-700 sm:w-auto"
+            >
+              新增病症
+            </button>
+            <label
+              htmlFor={fileInputId}
+              className={`inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-emerald-700 sm:w-auto ${
+                importing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+              }`}
+            >
+              批量导入
+            </label>
+            <a href="/example.xlsx" download className="text-xs text-slate-500 hover:text-slate-700">
+              下载示例
+            </a>
+          </div>
+        }
+      >
       <div className="rounded-2xl border border-slate-100 bg-white/70 lg:hidden">
         <div className="divide-y divide-slate-100">
           {pageItems.map((item) => (
