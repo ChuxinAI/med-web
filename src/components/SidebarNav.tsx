@@ -59,10 +59,10 @@ export function SidebarNav({ items, title, userName, className, onNavigate, onUs
         <button
           type="button"
           onClick={onUserClick}
-          className="mt-auto flex w-full flex-col items-start gap-1 rounded-xl bg-slate-50 px-4 py-3 text-left text-slate-700 transition hover:bg-slate-100"
+          className="mt-auto flex w-full items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-left text-slate-700 transition hover:bg-slate-100"
         >
           <span className="text-xs text-slate-500">当前用户</span>
-          <span className="w-full truncate text-sm font-semibold text-ink">{userName}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{userName}</span>
         </button>
       ) : null}
     </nav>
