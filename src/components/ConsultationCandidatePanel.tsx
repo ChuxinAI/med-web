@@ -10,7 +10,7 @@ import { DiseaseDetailModal } from './DiseaseDetailModal'
 import { readReasoningConfirmedSymptoms } from '../lib/reasoningStorage'
 
 type CandidateSymptomDetailWithPartial = ConsultationCandidateSymptomDetail & {
-  partialMatchedCount: number
+  symptoms: string[]
 }
 
 export function ConsultationCandidatePanel({
@@ -50,6 +50,10 @@ export function ConsultationCandidatePanel({
     if (!currentNode?.candidateIds?.length) return null
     return new Set(currentNode.candidateIds.map((id) => String(id)))
   }, [currentNode?.candidateIds])
+  const confirmedSymptoms = useMemo(
+    () => dedupeSymptoms([...normalizedUserSymptoms, ...yesSymptoms]),
+    [normalizedUserSymptoms, yesSymptoms],
+  )
   const diseaseMap = useMemo(() => {
     const map = new Map<string, Disease>()
     ;(catalog ?? []).forEach((item) => map.set(item.id, item))
@@ -69,24 +73,20 @@ export function ConsultationCandidatePanel({
     const noSet = new Set(noSymptoms)
     const map = new Map<string, CandidateSymptomDetailWithPartial>()
     candidateSymptomDetails.forEach((detail) => {
-      const symptoms = detail.symptoms ?? []
+      const symptoms = mergeSymptoms(detail.symptoms ?? [], detail.matchedSymptoms, detail.unmatchedSymptoms)
       const baseMatched =
         normalizedUserSymptoms.length > 0
           ? normalizedUserSymptoms
           : [...detail.matchedSymptoms, ...(candidateMatchedMap.get(detail.id) ?? [])]
-      const confirmed = [...baseMatched, ...yesSymptoms]
+      const confirmed = dedupeSymptoms([...baseMatched, ...yesSymptoms])
       const yesSet = new Set(confirmed)
       const matchedSymptoms = symptoms.filter((symptom) => yesSet.has(symptom))
       const unmatchedSymptoms = symptoms.filter((symptom) => !yesSet.has(symptom) && !noSet.has(symptom))
-      const partialMatchedCount = symptoms.reduce((count, symptom) => {
-        if (!symptom || yesSet.has(symptom) || noSet.has(symptom)) return count
-        return hasPartialSymptomMatch(symptom, confirmed) ? count + 1 : count
-      }, 0)
       map.set(detail.id, {
         ...detail,
+        symptoms,
         matchedSymptoms,
         unmatchedSymptoms,
-        partialMatchedCount,
       })
     })
     return map
@@ -94,12 +94,12 @@ export function ConsultationCandidatePanel({
   const filteredCandidates = useMemo(() => {
     const source = candidateIdFilter ? candidates.filter((item) => candidateIdFilter.has(item.id)) : candidates
     return source.slice().sort((a, b) => {
-      const scoreA = resolveProbability(a, symptomDetailMap)
-      const scoreB = resolveProbability(b, symptomDetailMap)
+      const scoreA = resolveProbability(a, symptomDetailMap, confirmedSymptoms, diseaseMap)
+      const scoreB = resolveProbability(b, symptomDetailMap, confirmedSymptoms, diseaseMap)
       if (scoreB !== scoreA) return scoreB - scoreA
       return a.name.localeCompare(b.name, 'zh-Hans-CN')
     })
-  }, [candidateIdFilter, candidates, symptomDetailMap])
+  }, [candidateIdFilter, candidates, confirmedSymptoms, diseaseMap, symptomDetailMap])
   const visibleCandidates = filteredCandidates
   const selectedSymptomDetail = selectedCandidate ? symptomDetailMap.get(selectedCandidate.id) : undefined
   const askedSet = useMemo(
@@ -112,10 +112,6 @@ export function ConsultationCandidatePanel({
   )
   const activeAskSymptom = currentNode?.askSymptom ?? fallbackAskSymptom ?? null
   const isTreeAsk = Boolean(currentNode?.askSymptom)
-  const confirmedSymptoms = useMemo(
-    () => dedupeSymptoms([...normalizedUserSymptoms, ...yesSymptoms]),
-    [normalizedUserSymptoms, yesSymptoms],
-  )
   const persistenceKey = storageKey ? `consultation-reasoning:${storageKey}` : null
   const baseCandidateKey = useMemo(() => {
     if (candidates.length === 0) return null
@@ -228,7 +224,8 @@ export function ConsultationCandidatePanel({
               onClick={() => setSelectedCandidate(item)}
               className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700 transition hover:border-primary-200 hover:text-primary-700"
             >
-              {item.name} {formatProbability(resolveProbability(item, symptomDetailMap))}
+              {item.name}{' '}
+              {formatProbability(resolveProbability(item, symptomDetailMap, confirmedSymptoms, diseaseMap))}
             </button>
           ))}
         </div>
@@ -327,12 +324,26 @@ function formatProbability(value?: number) {
 function resolveProbability(
   candidate: ConsultationCandidateDisease,
   symptomDetailMap: Map<string, CandidateSymptomDetailWithPartial>,
+  confirmedSymptoms: string[],
+  diseaseMap: Map<string, Disease>,
 ) {
   const detail = symptomDetailMap.get(candidate.id)
-  if (!detail || detail.symptoms.length === 0) return candidate.probability
-  const score =
-    (detail.matchedSymptoms.length + detail.partialMatchedCount * 0.5) / detail.symptoms.length
-  return Number.isFinite(score) ? score * 100 : candidate.probability
+  const candidateSymptoms = detail ? expandSymptoms(detail.symptoms) : []
+  const diseaseSymptomsText = diseaseMap.get(candidate.id)?.symptoms ?? ''
+  const fallbackSymptoms = diseaseSymptomsText ? expandSymptoms([diseaseSymptomsText]) : []
+  const resolvedCandidateSymptoms =
+    candidateSymptoms.length <= 1 && fallbackSymptoms.length > candidateSymptoms.length
+      ? fallbackSymptoms
+      : candidateSymptoms
+  if (resolvedCandidateSymptoms.length === 0) return candidate.probability
+  const userSymptoms = expandSymptoms(confirmedSymptoms)
+  if (userSymptoms.length === 0) return 0
+  const totalScore = resolvedCandidateSymptoms.reduce((sum, symptom) => {
+    return sum + resolveSymptomMatchScore(symptom, userSymptoms)
+  }, 0)
+  const ratio = totalScore / resolvedCandidateSymptoms.length
+  if (!Number.isFinite(ratio)) return candidate.probability
+  return Math.max(0, Math.min(100, ratio * 100))
 }
 
 function removeLast(list: string[], value: string) {
@@ -355,14 +366,85 @@ function pickNextSymptom(
   return null
 }
 
-function hasPartialSymptomMatch(target: string, confirmed: string[]) {
-  if (!target) return false
-  for (const item of confirmed) {
-    if (!item) continue
-    if (item === target) return true
-    if (item.includes(target) || target.includes(item)) return true
+function resolveSymptomMatchScore(candidateSymptom: string, userSymptoms: string[]) {
+  const candidate = normalizeSymptom(candidateSymptom)
+  if (!candidate) return 0
+  let best = 0
+  for (const rawUser of userSymptoms) {
+    const user = normalizeSymptom(rawUser)
+    if (!user) continue
+    if (user === candidate) return 1
+    if (user.includes(candidate)) return 1
+    if (candidate.includes(user)) {
+      best = Math.max(best, user.length / candidate.length)
+      continue
+    }
+    const overlap = longestCommonSubstringLength(candidate, user)
+    if (overlap > 0) {
+      best = Math.max(best, overlap / candidate.length)
+    }
   }
-  return false
+  return best
+}
+
+function expandSymptoms(list: string[]) {
+  const items: string[] = []
+  list.forEach((entry) => {
+    const parts = splitSymptomText(entry)
+    if (parts.length > 0) {
+      items.push(...parts)
+    }
+  })
+  return dedupeSymptoms(items.map(normalizeSymptom).filter(Boolean))
+}
+
+function splitSymptomText(text: string) {
+  if (!text) return []
+  return text
+    .split(/[、，,。.;；\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function normalizeSymptom(text: string) {
+  return text.trim().replace(/\s+/g, ' ')
+}
+
+function longestCommonSubstringLength(a: string, b: string) {
+  if (!a || !b) return 0
+  const aLen = a.length
+  const bLen = b.length
+  const dp = new Array(bLen + 1).fill(0)
+  let max = 0
+  for (let i = 1; i <= aLen; i += 1) {
+    let prev = 0
+    const aChar = a[i - 1]
+    for (let j = 1; j <= bLen; j += 1) {
+      const temp = dp[j]
+      if (aChar === b[j - 1]) {
+        dp[j] = prev + 1
+        if (dp[j] > max) max = dp[j]
+      } else {
+        dp[j] = 0
+      }
+      prev = temp
+    }
+  }
+  return max
+}
+
+function mergeSymptoms(...lists: Array<string[] | undefined>) {
+  const seen = new Set<string>()
+  const result: string[] = []
+  lists.forEach((list) => {
+    if (!list) return
+    list.forEach((item) => {
+      if (!item || seen.has(item)) return
+      seen.add(item)
+      result.push(item)
+    })
+  })
+  return result
 }
 
 function dedupeSymptoms(items: string[]) {
