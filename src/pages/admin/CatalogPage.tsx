@@ -33,6 +33,37 @@ export function CatalogPage() {
   const fileInputId = 'disease-batch-import'
 
   const formatSkippedRow = (row: Record<string, unknown>) => {
+    const translateReason = (value: string) => {
+      const normalized = value.trim()
+      const known: Record<string, string> = {
+        duplicate: '重复数据',
+        duplicate_name: '病症名重复',
+        'name.duplicate': '病症名重复',
+        'disease.name.duplicate': '病症名重复',
+        missing_name: '缺少病症名',
+        'name.missing': '缺少病症名',
+        missing_symptoms: '缺少症状描述',
+        'symptoms.missing': '缺少症状描述',
+        missing_formula: '缺少方剂',
+        'formula.missing': '缺少方剂',
+        invalid_type: '类型不合法',
+        invalid_type_code: '类型不合法',
+        'type.invalid': '类型不合法',
+        'type_code.invalid': '类型不合法',
+        invalid_row: '行数据不合法',
+        row_invalid: '行数据不合法',
+        empty_row: '空行',
+        parse_error: '解析失败',
+        missing_required: '缺少必填字段',
+      }
+      if (known[normalized]) return known[normalized]
+      if (normalized.includes('duplicate')) return '重复数据'
+      if (normalized.includes('missing')) return '缺少必填字段'
+      if (normalized.includes('invalid')) return '字段不合法'
+      if (normalized.includes('empty')) return '空值'
+      if (normalized.includes('parse')) return '解析失败'
+      return value
+    }
     const keyMap: Record<string, string> = {
       name: '病症名',
       disease: '病症名',
@@ -56,7 +87,11 @@ export function CatalogPage() {
     }
     return Object.entries(row).map(([key, value]) => {
       const label = keyMap[key] ?? key
-      const text = value == null ? '' : String(value)
+      const rawText = value == null ? '' : String(value)
+      const text =
+        (key === 'reason' || key === 'error') && typeof value === 'string'
+          ? translateReason(rawText)
+          : rawText
       return `${label}：${text}`
     })
   }
@@ -180,14 +215,21 @@ export function CatalogPage() {
             >
               新增病症
             </button>
-            <label
-              htmlFor={fileInputId}
-              className={`inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-emerald-700 sm:w-auto ${
-                importing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-              }`}
-            >
-              批量导入
-            </label>
+          <label
+            htmlFor={fileInputId}
+            className={`inline-flex h-9 w-full items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-soft-card transition hover:bg-emerald-700 sm:w-auto ${
+              importing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+            }`}
+          >
+            {importing ? (
+              <span className="inline-flex items-center gap-2">
+                导入中
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-white" aria-hidden />
+              </span>
+            ) : (
+              '批量导入'
+            )}
+          </label>
             <a href="/example.xlsx" download className="text-xs text-slate-500 hover:text-slate-700">
               下载示例
             </a>

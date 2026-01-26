@@ -203,7 +203,7 @@ export const useCreateDisease = () => {
   return useMutation({
     mutationFn: (args: Parameters<typeof createDisease>[0]) => createDisease(args),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'] })
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'], exact: false })
     },
   })
 }
@@ -213,7 +213,7 @@ export const useDeleteDisease = () => {
   return useMutation({
     mutationFn: (args: { diseaseId: string }) => deleteDisease(args.diseaseId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'] })
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'], exact: false })
     },
   })
 }
@@ -224,7 +224,7 @@ export const useUpdateDisease = () => {
     mutationFn: (args: { diseaseId: string; patch: Parameters<typeof updateDisease>[1] }) =>
       updateDisease(args.diseaseId, args.patch),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'] })
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'], exact: false })
     },
   })
 }
@@ -234,7 +234,7 @@ export const useImportDiseases = () => {
   return useMutation({
     mutationFn: (args: { file: File }) => importDiseasesFromFile(args.file),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'] })
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'diseases'], exact: false })
     },
   })
 }
