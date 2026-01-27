@@ -36,7 +36,7 @@ export function AdminLoginPage() {
           <img
             src="/logo-full.png"
             alt="大用问证"
-            className="w-full max-w-xs select-none"
+            className="w-full max-w-[10.5rem] select-none sm:max-w-xs"
             draggable={false}
           />
         </div>

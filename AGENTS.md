@@ -60,9 +60,11 @@
   - 消息：`useCaseMessages` / `useSendConsultationMessage`
   - 草稿：`useConsultationDraft` / `useUpdateConsultationDraft`（字段拆分为 `/doctor/consultations/{id}` 的 `symptoms`/`disease`/`formula`/`note`）
   - 建议：`useCaseSuggestions`
+  - 推理选择：优先使用 `pending_symptom_groups`，为空时使用 `pending_symptoms`（后端已归一化）
   - 消息发送：`/doctor/consultations/{id}/messages` 使用 SSE 流式响应
     - `delta` 仅包含回复文本片段；`done` 返回结构化建议，候选病症概率在 `done` 统一返回
 - 模型决策：`/doctor/consultations/{id}/dialogue/stream`（`mode=model_decision`，SSE：`delta` 文本片段，`done` 返回 `reply`/`candidate_diseases`/`confirmed_symptoms`/`decision`）
+- 采纳疾病总结：`/doctor/consultations/{id}/dialogue/stream`（`mode=adopted_summary`，必填 `adopted_disease_id`，消息内容：`采纳病症：{疾病名}`）
 
 ## 引用与预览约定
 - 引用来自病症管理数据（`Disease`）

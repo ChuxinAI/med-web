@@ -252,9 +252,14 @@ export async function updateConsultationDraft(
 export async function sendConsultationDialogue(args: {
   consultationId: string
   message?: string | null
-  mode?: 'guided' | 'model_decision'
+  mode?: 'guided' | 'model_decision' | 'adopted_summary'
   topK?: number
+  adoptedDiseaseId?: string | number | null
 }): Promise<ConsultationDialogue> {
+  const adoptedDiseaseId =
+    args.adoptedDiseaseId === undefined || args.adoptedDiseaseId === null
+      ? null
+      : Number(args.adoptedDiseaseId)
   const dto = await apiRequest<ConsultationDialogueDto>(
     `/doctor/consultations/${args.consultationId}/dialogue`,
     {
@@ -263,6 +268,7 @@ export async function sendConsultationDialogue(args: {
         message: args.message ?? null,
         mode: args.mode ?? 'guided',
         top_k: args.topK ?? 10,
+        adopted_disease_id: Number.isFinite(adoptedDiseaseId) ? adoptedDiseaseId : null,
       }),
     },
   )
@@ -275,17 +281,32 @@ type StreamHandlers = {
   onError?: (error: Error) => void
 }
 
+function unwrapStreamPayload(payload: unknown) {
+  if (payload && typeof payload === 'object') {
+    const source = payload as { data?: unknown; event?: string }
+    const data = source.data
+    if (data && typeof data === 'object') {
+      const inner = data as Record<string, unknown>
+      // Preserve event name if backend encodes it inside the JSON payload.
+      return source.event && !('event' in inner) ? { event: source.event, ...inner } : inner
+    }
+  }
+  return payload
+}
+
 function extractStreamDelta(payload: unknown) {
   if (!payload) return ''
   if (typeof payload === 'string') return payload
   if (typeof payload === 'object') {
-    const data = payload as {
+    const normalized = unwrapStreamPayload(payload) as {
       delta?: string
       content?: string
       text?: string
       message?: { content?: string }
     }
-    return data.delta ?? data.content ?? data.text ?? data.message?.content ?? ''
+    return (
+      normalized?.delta ?? normalized?.content ?? normalized?.text ?? normalized?.message?.content ?? ''
+    )
   }
   return ''
 }
@@ -313,9 +334,25 @@ async function readSseResponse(response: Response, handlers?: StreamHandlers) {
         dataLines.push(line.slice(5).trim())
       }
     })
-    if (dataLines.length === 0) return
-    const data = dataLines.join('\n')
+    let data = dataLines.join('\n')
     let payload: unknown = data
+    if (dataLines.length === 0) {
+      const trimmed = raw.trim()
+      if (!trimmed) return
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          payload = JSON.parse(trimmed)
+          if (!doneEmitted) {
+            donePayload = payload
+            handlers?.onDone?.(payload)
+            doneEmitted = true
+          }
+        } catch {
+          // ignore non-JSON raw chunks
+        }
+      }
+      return
+    }
     if (data.startsWith('{') || data.startsWith('[')) {
       try {
         payload = JSON.parse(data)
@@ -324,12 +361,29 @@ async function readSseResponse(response: Response, handlers?: StreamHandlers) {
       }
     }
 
-    const normalizedEvent =
-      event || (typeof payload === 'object' && payload ? (payload as { event?: string }).event : '')
-    if (normalizedEvent === 'done') {
+    const normalizedPayload = unwrapStreamPayload(payload)
+    const isAdoptedDone =
+      normalizedPayload &&
+      typeof normalizedPayload === 'object' &&
+      ('adopted_summary' in normalizedPayload || 'reply' in normalizedPayload)
+    if (!event && isAdoptedDone) {
       if (!doneEmitted) {
-        donePayload = payload
-        handlers?.onDone?.(payload)
+        donePayload = normalizedPayload
+        handlers?.onDone?.(normalizedPayload)
+        doneEmitted = true
+      }
+      return
+    }
+
+    const normalizedEvent =
+      event ||
+      (typeof normalizedPayload === 'object' && normalizedPayload
+        ? (normalizedPayload as { event?: string }).event
+        : '')
+    if (normalizedEvent === 'done' || isAdoptedDone) {
+      if (!doneEmitted) {
+        donePayload = normalizedPayload
+        handlers?.onDone?.(normalizedPayload)
         doneEmitted = true
       }
       return
@@ -339,9 +393,9 @@ async function readSseResponse(response: Response, handlers?: StreamHandlers) {
       handlers?.onError?.(new Error(message))
       return
     }
-    const delta = extractStreamDelta(payload)
+    const delta = extractStreamDelta(normalizedPayload)
     if (delta) {
-      handlers?.onDelta?.(delta, payload)
+      handlers?.onDelta?.(delta, normalizedPayload)
     }
   }
 
@@ -350,14 +404,17 @@ async function readSseResponse(response: Response, handlers?: StreamHandlers) {
       const { value, done } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
-      let separatorIndex = buffer.indexOf('\n\n')
+      let separatorIndex = buffer.search(/\r?\n\r?\n/)
       while (separatorIndex !== -1) {
         const raw = buffer.slice(0, separatorIndex)
-        buffer = buffer.slice(separatorIndex + 2)
+        const delimiterMatch = buffer.match(/\r?\n\r?\n/)
+        const delimiterLength = delimiterMatch && delimiterMatch.index === separatorIndex ? delimiterMatch[0].length : 2
+        buffer = buffer.slice(separatorIndex + delimiterLength)
         handleEvent(raw)
-        separatorIndex = buffer.indexOf('\n\n')
+        separatorIndex = buffer.search(/\r?\n\r?\n/)
       }
     }
+    buffer += decoder.decode()
     if (buffer.trim()) {
       handleEvent(buffer)
     }
@@ -408,11 +465,16 @@ export async function sendConsultationDialogueStream(
   args: {
     consultationId: string
     message?: string | null
-    mode?: 'guided' | 'model_decision'
+    mode?: 'guided' | 'model_decision' | 'adopted_summary'
     topK?: number
+    adoptedDiseaseId?: string | number | null
   },
   handlers?: StreamHandlers,
 ): Promise<ConsultationDialogue> {
+  const adoptedDiseaseId =
+    args.adoptedDiseaseId === undefined || args.adoptedDiseaseId === null
+      ? null
+      : Number(args.adoptedDiseaseId)
   const token = getAccessToken()
   const response = await fetch(
     `${API_BASE_URL}/doctor/consultations/${args.consultationId}/dialogue/stream`,
@@ -420,12 +482,14 @@ export async function sendConsultationDialogueStream(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
         message: args.message ?? null,
         mode: args.mode ?? 'model_decision',
         top_k: args.topK ?? 10,
+        adopted_disease_id: Number.isFinite(adoptedDiseaseId) ? adoptedDiseaseId : null,
       }),
     },
   )

@@ -4,6 +4,7 @@ import {
   useCaseMessages,
   useCaseSuggestions,
   useCatalog,
+  useConsultationAdoptedSummaryStream,
   useConsultationDecisionStream,
   useConsultationDraft,
   useCreateDoctorPatient,
@@ -19,7 +20,11 @@ import { SourcePreviewModal } from './SourcePreviewModal'
 import { consultationGuideMessage } from '../lib/consultationGuide'
 import { ConsultationCandidatePanel } from './ConsultationCandidatePanel'
 import { dedupeSymptoms, readReasoningConfirmedSymptoms, writeReasoningConfirmedSymptoms } from '../lib/reasoningStorage'
-import { extractAssistantContent } from '../lib/consultationStream'
+import {
+  extractAssistantContent,
+  extractAssistantCreatedAt,
+  normalizeDialoguePayload,
+} from '../lib/consultationStream'
 
 export function ConsultationWorkspaceModal({
   open,
@@ -51,9 +56,13 @@ export function ConsultationWorkspaceModal({
   const updateDraft = useUpdateConsultationDraft()
   const sendMessage = useSendConsultationMessage()
   const decisionStream = useConsultationDecisionStream()
+  const adoptedSummaryStream = useConsultationAdoptedSummaryStream()
   const [reasoningConfirmedSymptoms, setReasoningConfirmedSymptoms] = useState<string[]>([])
   const [decisionStreamingMessage, setDecisionStreamingMessage] = useState<CaseMessage | null>(null)
   const [decisionPending, setDecisionPending] = useState(false)
+  const [adoptedStreamingMessage, setAdoptedStreamingMessage] = useState<CaseMessage | null>(null)
+  const [adoptedPending, setAdoptedPending] = useState(false)
+  const [adoptedUserMessages, setAdoptedUserMessages] = useState<CaseMessage[]>([])
   const suggestedSymptoms = useMemo(() => {
     if (reasoningConfirmedSymptoms.length > 0) return reasoningConfirmedSymptoms
     return suggestion?.confirmedSymptoms ?? []
@@ -66,15 +75,20 @@ export function ConsultationWorkspaceModal({
   const canSend = useMemo(() => input.trim().length > 0 && !pending, [input, pending])
   const transcript = useMemo(() => {
     return (messages ?? [])
+      .concat(adoptedUserMessages)
       .concat(decisionStreamingMessage && decisionStreamingMessage.content ? [decisionStreamingMessage] : [])
+      .concat(adoptedStreamingMessage ? [adoptedStreamingMessage] : [])
       .slice()
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-  }, [decisionStreamingMessage, messages])
+  }, [adoptedStreamingMessage, adoptedUserMessages, decisionStreamingMessage, messages])
 
   useEffect(() => {
     setReasoningConfirmedSymptoms([])
     setDecisionStreamingMessage(null)
     setDecisionPending(false)
+    setAdoptedStreamingMessage(null)
+    setAdoptedPending(false)
+    setAdoptedUserMessages([])
   }, [consultationId])
 
   useEffect(() => {
@@ -94,15 +108,47 @@ export function ConsultationWorkspaceModal({
     }
     return null
   }, [transcript])
+  const latestAdoptedReply = useMemo(() => {
+    const content = latestModelMessage?.content?.trim()
+    if (!content) return false
+    return content.startsWith('**采纳病症')
+  }, [latestModelMessage?.content])
   const latestModelId = latestModelMessage?.id ?? null
   const canShowInlineCandidatePanel = useMemo(() => {
     if (!latestModelId || decisionPending) return false
     if (latestModelMessage?.content.includes('模型自主分析')) return false
+    if (adoptedPending) return false
+    if (latestModelMessage?.adoptedSummary) return false
+    if (latestModelId === adoptedStreamingMessage?.id) return false
+    if (latestAdoptedReply) return false
     return true
-  }, [decisionPending, latestModelId, latestModelMessage?.content])
-  const suppressCandidatePanel = Boolean(latestModelMessage?.content.includes('模型自主分析'))
+  }, [
+    adoptedPending,
+    adoptedStreamingMessage?.id,
+    decisionPending,
+    latestAdoptedReply,
+    latestModelId,
+    latestModelMessage?.content,
+  ])
+  const suppressCandidatePanel =
+    Boolean(latestModelMessage?.content.includes('模型自主分析')) ||
+    adoptedPending ||
+    Boolean(latestModelMessage?.adoptedSummary) ||
+    latestAdoptedReply
   const handleAdoptDisease = async (disease: Disease) => {
-    if (!consultationId || readOnly || !draft) return
+    if (!consultationId || readOnly || !draft || adoptedSummaryStream.isPending || adoptedPending) return
+    const adoptContent = `采纳病症：${disease.name}`
+    const adoptMessage: CaseMessage = {
+      id: `adopt-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'doctor',
+      content: adoptContent,
+      createdAt: new Date().toISOString(),
+    }
+    setAdoptedUserMessages((prev) => [...prev, adoptMessage])
+    const adoptTimestamp = Date.parse(adoptMessage.createdAt)
+    const streamCreatedAt = Number.isFinite(adoptTimestamp)
+      ? new Date(adoptTimestamp + 1).toISOString()
+      : new Date().toISOString()
     await updateDraft.mutateAsync({
       consultationId,
       patch: {
@@ -116,6 +162,62 @@ export function ConsultationWorkspaceModal({
         },
       },
     })
+    const streamMessage: CaseMessage = {
+      id: `adopted-stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'model',
+      content: '',
+      createdAt: streamCreatedAt,
+      isStreaming: true,
+    }
+    setAdoptedPending(true)
+    setAdoptedStreamingMessage(streamMessage)
+    try {
+      await adoptedSummaryStream.mutateAsync({
+        consultationId,
+        adoptedDiseaseId: disease.id,
+        message: adoptContent,
+        onDelta: (delta) => {
+          if (!delta) return
+          setAdoptedStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? { ...prev, content: `${prev.content}${delta}` }
+              : prev,
+          )
+        },
+        onDone: (payload) => {
+          const normalized = normalizeDialoguePayload(payload)
+          const payloadReply =
+            normalized && typeof normalized === 'object' && ('reply' in normalized || 'replay' in normalized)
+              ? String((normalized as { reply?: string; replay?: string }).reply ?? (normalized as { replay?: string }).replay ?? '')
+              : ''
+          const finalText = extractAssistantContent(normalized) || payloadReply
+          const resolvedCreatedAt = extractAssistantCreatedAt(normalized) || new Date().toISOString()
+          const adoptedSummary =
+            normalized && typeof normalized === 'object' && 'adopted_summary' in normalized
+              ? Boolean((normalized as { adopted_summary?: boolean }).adopted_summary)
+              : false
+          setAdoptedStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? {
+                  ...prev,
+                  content: finalText || prev.content,
+                  createdAt: resolvedCreatedAt || prev.createdAt,
+                  isStreaming: false,
+                  adoptedSummary,
+                }
+              : prev,
+          )
+          setAdoptedPending(false)
+        },
+        onError: () => {
+          setAdoptedStreamingMessage(null)
+          setAdoptedPending(false)
+        },
+      })
+    } catch {
+      setAdoptedStreamingMessage(null)
+      setAdoptedPending(false)
+    }
   }
   const handleRequestDecision = async () => {
     if (!consultationId || readOnly || decisionStream.isPending || decisionPending) return
@@ -185,7 +287,15 @@ export function ConsultationWorkspaceModal({
     if (!open) return
     if (!consultationId) return
     bottomRef.current?.scrollIntoView({ block: 'end' })
-  }, [consultationId, decisionPending, decisionStreamingMessage?.content, messages?.length, open])
+  }, [
+    consultationId,
+    decisionPending,
+    decisionStreamingMessage?.content,
+    adoptedPending,
+    adoptedStreamingMessage?.content,
+    messages?.length,
+    open,
+  ])
 
   if (!open || !consultationId) return null
   if (typeof document === 'undefined') return null
@@ -248,6 +358,13 @@ export function ConsultationWorkspaceModal({
                       </div>
                     ) : null}
                     {decisionPending && !decisionStreamingMessage?.content ? (
+                      <div className="flex justify-start">
+                        <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+                          正在思考...
+                        </div>
+                      </div>
+                    ) : null}
+                    {adoptedPending && !adoptedStreamingMessage?.content ? (
                       <div className="flex justify-start">
                         <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
                           正在思考...

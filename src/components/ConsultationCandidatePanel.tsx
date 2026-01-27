@@ -8,6 +8,8 @@ import type {
 import { DiseaseDetailModal } from './DiseaseDetailModal'
 import { readReasoningConfirmedSymptoms } from '../lib/reasoningStorage'
 
+const MAX_REASONING_TURNS = 12
+
 type CandidateSymptomDetailWithPartial = ConsultationCandidateSymptomDetail & {
   symptoms: string[]
 }
@@ -42,10 +44,22 @@ export function ConsultationCandidatePanel({
 
   const candidates = suggestion?.candidateDiseases ?? []
   const normalizedUserSymptoms = suggestion?.normalizedUserSymptoms ?? []
+  const pendingSymptomGroups = useMemo(() => {
+    const rawGroups = suggestion?.pendingSymptomGroups ?? []
+    return rawGroups.map((group) => normalizeSymptomList(group)).filter((group) => group.length > 0)
+  }, [suggestion?.pendingSymptomGroups])
+  const pendingSymptoms = useMemo(
+    () => normalizeSymptomList(suggestion?.pendingSymptoms ?? []),
+    [suggestion?.pendingSymptoms],
+  )
   const candidateSymptomDetails = suggestion?.candidateSymptomDetails ?? []
   const confirmedSymptoms = useMemo(
     () => dedupeSymptoms([...normalizedUserSymptoms, ...yesSymptoms]),
     [normalizedUserSymptoms, yesSymptoms],
+  )
+  const confirmedSet = useMemo(
+    () => new Set(confirmedSymptoms.map(normalizeSymptom).filter(Boolean)),
+    [confirmedSymptoms],
   )
   const diseaseMap = useMemo(() => {
     const map = new Map<string, Disease>()
@@ -90,20 +104,6 @@ export function ConsultationCandidatePanel({
     })
     return map
   }, [candidateMatchedMap, candidateSymptomDetails, normalizedUserSymptoms, noSymptoms, yesSymptoms])
-  const candidateSymptomMap = useMemo(() => {
-    const map = new Map<string, string[]>()
-    candidates.forEach((candidate) => {
-      const detail = symptomDetailMap.get(candidate.id)
-      const baseSymptoms = detail?.symptoms ?? []
-      let expanded = expandSymptoms(baseSymptoms)
-      if (expanded.length === 0) {
-        const fallbackText = diseaseMap.get(candidate.id)?.symptoms ?? ''
-        expanded = expandSymptoms(fallbackText ? [fallbackText] : [])
-      }
-      map.set(candidate.id, expanded)
-    })
-    return map
-  }, [candidates, diseaseMap, symptomDetailMap])
   const filteredCandidates = useMemo(() => {
     return candidates.slice().sort((a, b) => {
       const scoreA = resolveProbability(a, symptomDetailMap, confirmedSymptoms, diseaseMap)
@@ -118,11 +118,19 @@ export function ConsultationCandidatePanel({
     const raw = [...normalizedUserSymptoms, ...yesSymptoms, ...noSymptoms]
     return new Set(raw.map(normalizeSymptom).filter(Boolean))
   }, [normalizedUserSymptoms, noSymptoms, yesSymptoms])
-  const fallbackAskSymptom = useMemo(
-    () => pickNextSymptom(candidates, candidateSymptomMap, askedSet),
-    [askedSet, candidateSymptomMap, candidates],
-  )
-  const activeAskSymptom = fallbackAskSymptom ?? null
+  const activeAskSymptom = useMemo(() => {
+    if (history.length >= MAX_REASONING_TURNS) return null
+    for (const group of pendingSymptomGroups) {
+      if (group.some((symptom) => confirmedSet.has(symptom))) continue
+      const nextSymptom = group.find((symptom) => !askedSet.has(symptom))
+      if (nextSymptom) return nextSymptom
+    }
+    if (pendingSymptomGroups.length === 0) {
+      const nextSymptom = pendingSymptoms.find((symptom) => !askedSet.has(symptom))
+      if (nextSymptom) return nextSymptom
+    }
+    return null
+  }, [askedSet, confirmedSet, history.length, pendingSymptomGroups, pendingSymptoms])
   const persistenceKey = storageKey ? `consultation-reasoning:${storageKey}` : null
   const baseCandidateKey = useMemo(() => {
     if (candidates.length === 0) return null
@@ -181,6 +189,7 @@ export function ConsultationCandidatePanel({
   const handleAnswer = (answer: 'yes' | 'no') => {
     if (readOnly) return
     if (!activeAskSymptom) return
+    if (history.length >= MAX_REASONING_TURNS) return
     hasUserInteractedRef.current = true
     const symptom = activeAskSymptom
     setHistory((prev) => [...prev, { answer, symptom }])
@@ -354,33 +363,16 @@ function removeLast(list: string[], value: string) {
   return list.slice(0, index).concat(list.slice(index + 1))
 }
 
-function pickNextSymptom(
-  candidates: ConsultationCandidateDisease[],
-  candidateSymptomMap: Map<string, string[]>,
-  askedSet: Set<string>,
-) {
-  const totalCandidates = candidates.length
-  if (totalCandidates === 0) return null
-  const symptomCounts = new Map<string, number>()
-  candidates.forEach((candidate) => {
-    const symptoms = candidateSymptomMap.get(candidate.id) ?? []
-    symptoms.forEach((symptom) => {
-      if (!symptom || askedSet.has(symptom)) return
-      symptomCounts.set(symptom, (symptomCounts.get(symptom) ?? 0) + 1)
-    })
+function normalizeSymptomList(list: string[]) {
+  const seen = new Set<string>()
+  const result: string[] = []
+  list.forEach((item) => {
+    const normalized = normalizeSymptom(item)
+    if (!normalized || seen.has(normalized)) return
+    seen.add(normalized)
+    result.push(normalized)
   })
-  let best: string | null = null
-  let bestScore = -1
-  let bestCount = -1
-  for (const [symptom, count] of symptomCounts.entries()) {
-    const score = Math.min(count, totalCandidates - count)
-    if (score > bestScore || (score === bestScore && count > bestCount)) {
-      best = symptom
-      bestScore = score
-      bestCount = count
-    }
-  }
-  return best
+  return result
 }
 
 function resolveCandidateClass(probability?: number) {

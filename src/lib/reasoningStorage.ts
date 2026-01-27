@@ -53,6 +53,16 @@ export function writeReasoningConfirmedSymptoms(storageKey: string, symptoms: st
   }
 }
 
+export function clearReasoningState(storageKey?: string) {
+  if (!storageKey || typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(confirmedKey(storageKey))
+    window.localStorage.removeItem(`consultation-reasoning:${storageKey}`)
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export function dedupeSymptoms(items: string[]) {
   const seen = new Set<string>()
   const result: string[] = []

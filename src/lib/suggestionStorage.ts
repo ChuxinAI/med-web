@@ -9,6 +9,8 @@ export function isSuggestionMeaningful(suggestion?: ConsultationSuggestion) {
   if (suggestion.reasoningTree) return true
   if (suggestion.confirmedSymptoms && suggestion.confirmedSymptoms.length > 0) return true
   if (suggestion.normalizedUserSymptoms && suggestion.normalizedUserSymptoms.length > 0) return true
+  if (suggestion.pendingSymptoms && suggestion.pendingSymptoms.length > 0) return true
+  if (suggestion.pendingSymptomGroups && suggestion.pendingSymptomGroups.length > 0) return true
   return false
 }
 
@@ -30,6 +32,15 @@ export function writeCachedSuggestion(caseId: string | undefined, suggestion?: C
   if (!isSuggestionMeaningful(suggestion)) return
   try {
     window.localStorage.setItem(suggestionKey(caseId), JSON.stringify(suggestion))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function clearCachedSuggestion(caseId?: string) {
+  if (!caseId || typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(suggestionKey(caseId))
   } catch {
     // ignore storage errors
   }

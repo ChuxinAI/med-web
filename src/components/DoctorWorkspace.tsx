@@ -4,6 +4,7 @@ import {
   useCaseMessages,
   useCaseSuggestions,
   useCatalog,
+  useConsultationAdoptedSummaryStream,
   useConsultationDecisionStream,
   useConsultationDraft,
   useCreateDoctorPatient,
@@ -16,7 +17,11 @@ import { CaseBuilderModal } from './CaseBuilderModal'
 import { ChatMessage } from './ChatMessage'
 import { Card } from './Card'
 import { CaseBuilderPanel } from './CaseBuilderPanel'
-import { extractAssistantContent } from '../lib/consultationStream'
+import {
+  extractAssistantContent,
+  extractAssistantCreatedAt,
+  normalizeDialoguePayload,
+} from '../lib/consultationStream'
 import { dedupeSymptoms, readReasoningConfirmedSymptoms, writeReasoningConfirmedSymptoms } from '../lib/reasoningStorage'
 import type { CaseMessage, ConsultationDraft, Disease } from '../types'
 
@@ -32,13 +37,16 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   const updateDraft = useUpdateConsultationDraft()
   const sendMessage = useSendConsultationMessage()
   const decisionStream = useConsultationDecisionStream()
+  const adoptedSummaryStream = useConsultationAdoptedSummaryStream()
 
   const [optimisticMessages, setOptimisticMessages] = useState<CaseMessage[]>([])
   const [streamingMessage, setStreamingMessage] = useState<CaseMessage | null>(null)
   const [streamingMatchId, setStreamingMatchId] = useState<string | null>(null)
   const [decisionStreamingMessage, setDecisionStreamingMessage] = useState<CaseMessage | null>(null)
+  const [adoptedStreamingMessage, setAdoptedStreamingMessage] = useState<CaseMessage | null>(null)
   const [candidatePending, setCandidatePending] = useState(false)
   const [decisionPending, setDecisionPending] = useState(false)
+  const [adoptedPending, setAdoptedPending] = useState(false)
   const [reasoningConfirmedSymptoms, setReasoningConfirmedSymptoms] = useState<string[]>([])
   const candidateSnapshotRef = useRef<typeof suggestion | null>(null)
   const draftSnapshotRef = useRef<ConsultationDraft | null>(null)
@@ -49,8 +57,10 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
     setStreamingMessage(null)
     setStreamingMatchId(null)
     setDecisionStreamingMessage(null)
+    setAdoptedStreamingMessage(null)
     setCandidatePending(false)
     setDecisionPending(false)
+    setAdoptedPending(false)
     setReasoningConfirmedSymptoms([])
     candidateSnapshotRef.current = null
     draftSnapshotRef.current = null
@@ -143,6 +153,8 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
     decisionStreamingMessage?.content,
     decisionStream.isPending,
     decisionPending,
+    adoptedStreamingMessage?.content,
+    adoptedPending,
     candidatePending,
     suggestion?.candidateDiseases?.length,
     suggestion?.candidateSymptomDetails?.length,
@@ -160,6 +172,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
         .concat(optimisticMessages)
         .concat(streamingMessage && streamingMessage.content ? [streamingMessage] : [])
         .concat(decisionStreamingMessage && decisionStreamingMessage.content ? [decisionStreamingMessage] : [])
+        .concat(adoptedStreamingMessage ? [adoptedStreamingMessage] : [])
         .map((message, index) => ({ message, index }))
         .sort((a, b) => {
           const timeA = Date.parse(a.message.createdAt)
@@ -172,7 +185,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
           return a.index - b.index
         })
         .map(({ message }) => message)),
-    [messages, optimisticMessages, streamingMessage, decisionStreamingMessage, streamingMatchId],
+    [messages, optimisticMessages, streamingMessage, decisionStreamingMessage, adoptedStreamingMessage, streamingMatchId],
   )
 
   const latestModelMessage = useMemo(() => {
@@ -181,17 +194,37 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
     }
     return null
   }, [groupedMessages])
+  const latestAdoptedReply = useMemo(() => {
+    const content = latestModelMessage?.content?.trim()
+    if (!content) return false
+    return content.startsWith('**采纳病症')
+  }, [latestModelMessage?.content])
   const latestModelId = latestModelMessage?.id ?? null
   const canShowInlineCandidatePanel = useMemo(() => {
     if (!latestModelId || decisionPending) return false
     if (latestModelMessage?.content.includes('模型自主分析')) return false
+    if (adoptedPending) return false
+    if (latestModelMessage?.adoptedSummary) return false
+    if (latestModelId === adoptedStreamingMessage?.id) return false
+    if (latestAdoptedReply) return false
     return true
-  }, [decisionPending, latestModelId, latestModelMessage?.content])
+  }, [
+    adoptedPending,
+    adoptedStreamingMessage?.id,
+    decisionPending,
+    latestAdoptedReply,
+    latestModelId,
+    latestModelMessage?.content,
+  ])
 
   const [input, setInput] = useState('')
   const [casePanelOpen, setCasePanelOpen] = useState(false)
 
-  const suppressCandidatePanel = Boolean(latestModelMessage?.content.includes('模型自主分析'))
+  const suppressCandidatePanel =
+    Boolean(latestModelMessage?.content.includes('模型自主分析')) ||
+    adoptedPending ||
+    Boolean(latestModelMessage?.adoptedSummary) ||
+    latestAdoptedReply
   const canShowCandidatePanel =
     Boolean(activeId) && (candidatePending || groupedMessages.length > 0) && !decisionPending && !suppressCandidatePanel
   const candidatePanel = canShowCandidatePanel ? (
@@ -309,7 +342,19 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   }
 
   const handleAdoptDisease = async (disease: Disease) => {
-    if (!activeId || !draft) return
+    if (!activeId || !draft || adoptedSummaryStream.isPending || adoptedPending) return
+    const adoptContent = `采纳病症：${disease.name}`
+    const adoptMessage: CaseMessage = {
+      id: `adopt-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'doctor',
+      content: adoptContent,
+      createdAt: new Date().toISOString(),
+    }
+    setOptimisticMessages((prev) => [...prev, adoptMessage])
+    const adoptTimestamp = Date.parse(adoptMessage.createdAt)
+    const streamCreatedAt = Number.isFinite(adoptTimestamp)
+      ? new Date(adoptTimestamp + 1).toISOString()
+      : new Date().toISOString()
     await updateDraft.mutateAsync({
       consultationId: activeId,
       patch: {
@@ -323,6 +368,62 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
         },
       },
     })
+    const streamMessage: CaseMessage = {
+      id: `adopted-stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'model',
+      content: '',
+      createdAt: streamCreatedAt,
+      isStreaming: true,
+    }
+    setAdoptedPending(true)
+    setAdoptedStreamingMessage(streamMessage)
+    try {
+      await adoptedSummaryStream.mutateAsync({
+        consultationId: activeId,
+        adoptedDiseaseId: disease.id,
+        message: adoptContent,
+        onDelta: (delta) => {
+          if (!delta) return
+          setAdoptedStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? { ...prev, content: `${prev.content}${delta}` }
+              : prev,
+          )
+        },
+        onDone: (payload) => {
+          const normalized = normalizeDialoguePayload(payload)
+          const payloadReply =
+            normalized && typeof normalized === 'object' && ('reply' in normalized || 'replay' in normalized)
+              ? String((normalized as { reply?: string; replay?: string }).reply ?? (normalized as { replay?: string }).replay ?? '')
+              : ''
+          const finalText = extractAssistantContent(normalized) || payloadReply
+          const resolvedCreatedAt = extractAssistantCreatedAt(normalized) || new Date().toISOString()
+          const adoptedSummary =
+            normalized && typeof normalized === 'object' && 'adopted_summary' in normalized
+              ? Boolean((normalized as { adopted_summary?: boolean }).adopted_summary)
+              : false
+          setAdoptedStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? {
+                  ...prev,
+                  content: finalText || prev.content,
+                  createdAt: resolvedCreatedAt || prev.createdAt,
+                  isStreaming: false,
+                  adoptedSummary,
+                }
+              : prev,
+          )
+          setAdoptedPending(false)
+        },
+        onError: () => {
+          setAdoptedStreamingMessage(null)
+          setAdoptedPending(false)
+        },
+      })
+    } catch {
+      setAdoptedStreamingMessage(null)
+      setAdoptedPending(false)
+    }
   }
 
   const handleRequestDecision = async () => {
@@ -457,16 +558,25 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
                   message={m}
                   hideTimestamp={Boolean(m.isStreaming)}
                   footer={
-                    m.id === latestModelId &&
-                    m.sender === 'model' &&
-                    !decisionPending &&
-                    !m.content.includes('模型自主分析') ? (
-                    candidatePanel
-                    ) : null
+                    m.id === latestModelId && m.sender === 'model' && canShowInlineCandidatePanel && !m.adoptedSummary
+                      ? candidatePanel
+                      : null
                   }
                 />
               ))}
               {decisionPending && !decisionStreamingMessage?.content ? (
+                <div className="rounded-2xl border border-slate-100 bg-white/80 p-3 text-sm text-slate-600 shadow-sm">
+                  <span className="inline-flex items-center">
+                    正在思考
+                    <span className="thinking-dots" aria-hidden>
+                      <span className="thinking-dot" />
+                      <span className="thinking-dot" />
+                      <span className="thinking-dot" />
+                    </span>
+                  </span>
+                </div>
+              ) : null}
+              {adoptedPending && !adoptedStreamingMessage?.content ? (
                 <div className="rounded-2xl border border-slate-100 bg-white/80 p-3 text-sm text-slate-600 shadow-sm">
                   <span className="inline-flex items-center">
                     正在思考

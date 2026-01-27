@@ -3,6 +3,7 @@ import {
   useCaseMessages,
   useCaseSuggestions,
   useCatalog,
+  useConsultationAdoptedSummaryStream,
   useConsultationDecisionStream,
   useConsultationDraft,
   useCreateConsultation,
@@ -21,9 +22,20 @@ import { ConsultationCandidatePanel } from '../../components/ConsultationCandida
 import { InlineNotice } from '../../components/InlineNotice'
 import { SourcePreviewModal } from '../../components/SourcePreviewModal'
 import { consultationGuideMessage } from '../../lib/consultationGuide'
-import { extractAssistantContent } from '../../lib/consultationStream'
-import { dedupeSymptoms, readReasoningConfirmedSymptoms, writeReasoningConfirmedSymptoms } from '../../lib/reasoningStorage'
+import {
+  extractAssistantContent,
+  extractAssistantCreatedAt,
+  normalizeDialoguePayload,
+} from '../../lib/consultationStream'
+import {
+  clearReasoningState,
+  dedupeSymptoms,
+  readReasoningConfirmedSymptoms,
+  writeReasoningConfirmedSymptoms,
+} from '../../lib/reasoningStorage'
 import type { CaseMessage, Citation, ConsultationDraft, Disease } from '../../types'
+import { clearCachedSuggestion } from '../../lib/suggestionStorage'
+import { useQueryClient } from '@tanstack/react-query'
 
 const lastConsultationStorageKeyBase = 'doctor:lastConsultationId'
 const buildLastConsultationKey = (userId?: string) =>
@@ -40,14 +52,17 @@ export function ChatPage() {
   const [streamingMessage, setStreamingMessage] = useState<CaseMessage | null>(null)
   const [streamingMatchId, setStreamingMatchId] = useState<string | null>(null)
   const [decisionStreamingMessage, setDecisionStreamingMessage] = useState<CaseMessage | null>(null)
+  const [adoptedStreamingMessage, setAdoptedStreamingMessage] = useState<CaseMessage | null>(null)
   const [candidatePending, setCandidatePending] = useState(false)
   const [decisionPending, setDecisionPending] = useState(false)
+  const [adoptedPending, setAdoptedPending] = useState(false)
   const [reasoningConfirmedSymptoms, setReasoningConfirmedSymptoms] = useState<string[]>([])
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; message: string } | null>(null)
   const candidateSnapshotRef = useRef<typeof suggestion | null>(null)
   const draftSnapshotRef = useRef<ConsultationDraft | null>(null)
   const createInFlightRef = useRef(false)
 
+  const queryClient = useQueryClient()
   const { data: currentUser } = useCurrentUser('doctor')
   const lastConsultationStorageKey = useMemo(
     () => buildLastConsultationKey(currentUser?.id),
@@ -72,6 +87,7 @@ export function ChatPage() {
   const updateDraft = useUpdateConsultationDraft()
   const sendMessage = useSendConsultationMessage()
   const decisionStream = useConsultationDecisionStream()
+  const adoptedSummaryStream = useConsultationAdoptedSummaryStream()
 
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
@@ -85,8 +101,10 @@ export function ChatPage() {
     setStreamingMessage(null)
     setStreamingMatchId(null)
     setDecisionStreamingMessage(null)
+    setAdoptedStreamingMessage(null)
     setCandidatePending(false)
     setDecisionPending(false)
+    setAdoptedPending(false)
     setReasoningConfirmedSymptoms([])
     candidateSnapshotRef.current = null
     draftSnapshotRef.current = null
@@ -167,8 +185,10 @@ export function ChatPage() {
     messages?.length,
     streamingMessage?.content,
     decisionStreamingMessage?.content,
+    adoptedStreamingMessage?.content,
     decisionStream.isPending,
     decisionPending,
+    adoptedPending,
     candidatePending,
     suggestion?.candidateDiseases?.length,
     suggestion?.candidateSymptomDetails?.length,
@@ -189,6 +209,7 @@ export function ChatPage() {
       .concat(optimisticMessages)
       .concat(streamingMessage && streamingMessage.content ? [streamingMessage] : [])
       .concat(decisionStreamingMessage && decisionStreamingMessage.content ? [decisionStreamingMessage] : [])
+      .concat(adoptedStreamingMessage ? [adoptedStreamingMessage] : [])
     return items
       .map((message, index) => ({ message, index }))
       .sort((a, b) => {
@@ -202,7 +223,14 @@ export function ChatPage() {
         return a.index - b.index
       })
       .map(({ message }) => message)
-  }, [messages, optimisticMessages, streamingMessage, decisionStreamingMessage, streamingMatchId])
+  }, [
+    messages,
+    optimisticMessages,
+    streamingMessage,
+    decisionStreamingMessage,
+    adoptedStreamingMessage,
+    streamingMatchId,
+  ])
 
   const latestModelMessage = useMemo(() => {
     for (let i = transcript.length - 1; i >= 0; i -= 1) {
@@ -210,12 +238,18 @@ export function ChatPage() {
     }
     return null
   }, [transcript])
+  const latestAdoptedReply = useMemo(() => {
+    const content = latestModelMessage?.content?.trim()
+    if (!content) return false
+    return content.startsWith('**采纳病症')
+  }, [latestModelMessage?.content])
   const latestModelId = latestModelMessage?.id ?? null
   const canShowInlineCandidatePanel = useMemo(() => {
     if (!latestModelId || decisionPending) return false
     if (latestModelMessage?.content.includes('模型自主分析')) return false
+    if (latestAdoptedReply) return false
     return true
-  }, [decisionPending, latestModelId, latestModelMessage?.content])
+  }, [decisionPending, latestAdoptedReply, latestModelId, latestModelMessage?.content])
 
   const isDraftEmpty = useMemo(() => {
     if (!draft) return false
@@ -424,7 +458,19 @@ export function ChatPage() {
   }
 
   const handleAdoptDisease = async (disease: Disease) => {
-    if (!consultationId || !draft) return
+    if (!consultationId || !draft || adoptedSummaryStream.isPending || adoptedPending) return
+    const adoptContent = `采纳病症：${disease.name}`
+    const adoptMessage: CaseMessage = {
+      id: `adopt-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'doctor',
+      content: adoptContent,
+      createdAt: new Date().toISOString(),
+    }
+    setOptimisticMessages((prev) => [...prev, adoptMessage])
+    const adoptTimestamp = Date.parse(adoptMessage.createdAt)
+    const streamCreatedAt = Number.isFinite(adoptTimestamp)
+      ? new Date(adoptTimestamp + 1).toISOString()
+      : new Date().toISOString()
     await updateDraft.mutateAsync({
       consultationId,
       patch: {
@@ -438,6 +484,62 @@ export function ChatPage() {
         },
       },
     })
+    const streamMessage: CaseMessage = {
+      id: `adopted-stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sender: 'model',
+      content: '',
+      createdAt: streamCreatedAt,
+      isStreaming: true,
+    }
+    setAdoptedPending(true)
+    setAdoptedStreamingMessage(streamMessage)
+    try {
+      await adoptedSummaryStream.mutateAsync({
+        consultationId,
+        adoptedDiseaseId: disease.id,
+        message: adoptContent,
+        onDelta: (delta) => {
+          if (!delta) return
+          setAdoptedStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? { ...prev, content: `${prev.content}${delta}` }
+              : prev,
+          )
+        },
+        onDone: (payload) => {
+          const normalized = normalizeDialoguePayload(payload)
+          const payloadReply =
+            normalized && typeof normalized === 'object' && ('reply' in normalized || 'replay' in normalized)
+              ? String((normalized as { reply?: string; replay?: string }).reply ?? (normalized as { replay?: string }).replay ?? '')
+              : ''
+          const finalText = extractAssistantContent(normalized) || payloadReply
+          const resolvedCreatedAt = extractAssistantCreatedAt(normalized) || new Date().toISOString()
+          const adoptedSummary =
+            normalized && typeof normalized === 'object' && 'adopted_summary' in normalized
+              ? Boolean((normalized as { adopted_summary?: boolean }).adopted_summary)
+              : false
+          setAdoptedStreamingMessage((prev) =>
+            prev && prev.id === streamMessage.id
+              ? {
+                  ...prev,
+                  content: finalText || prev.content,
+                  createdAt: resolvedCreatedAt || prev.createdAt,
+                  isStreaming: false,
+                  adoptedSummary,
+                }
+              : prev,
+          )
+          setAdoptedPending(false)
+        },
+        onError: () => {
+          setAdoptedStreamingMessage(null)
+          setAdoptedPending(false)
+        },
+      })
+    } catch {
+      setAdoptedStreamingMessage(null)
+      setAdoptedPending(false)
+    }
   }
 
   const handleRequestDecision = async () => {
@@ -518,6 +620,24 @@ export function ChatPage() {
       setNotice({ tone: 'info', message: '当前问诊为空，无需开启新问诊。' })
       return
     }
+    if (consultationId) {
+      clearCachedSuggestion(consultationId)
+      clearReasoningState(consultationId)
+      void queryClient.removeQueries({ queryKey: ['case', consultationId], exact: false })
+      void queryClient.removeQueries({ queryKey: ['consultation', consultationId], exact: false })
+    }
+    setConsultationId(null)
+    setOptimisticMessages([])
+    setStreamingMessage(null)
+    setStreamingMatchId(null)
+    setDecisionStreamingMessage(null)
+    setAdoptedStreamingMessage(null)
+    setCandidatePending(false)
+    setDecisionPending(false)
+    setAdoptedPending(false)
+    setReasoningConfirmedSymptoms([])
+    candidateSnapshotRef.current = null
+    draftSnapshotRef.current = null
     setPending(false)
     setInput('')
     try {
@@ -527,7 +647,14 @@ export function ChatPage() {
     }
   }
 
-  const suppressCandidatePanel = Boolean(latestModelMessage?.content.includes('模型自主分析'))
+  const isAdoptedResponse =
+    Boolean(latestModelMessage?.adoptedSummary) ||
+    latestModelId === adoptedStreamingMessage?.id ||
+    latestAdoptedReply
+  const suppressCandidatePanel =
+    Boolean(latestModelMessage?.content.includes('模型自主分析')) ||
+    adoptedPending ||
+    isAdoptedResponse
   const isThinking = pending && !streamingMessage?.content
   const canShowCandidatePanel =
     Boolean(consultationId) &&
@@ -585,10 +712,7 @@ export function ChatPage() {
                     onOpenCitation={(c) => setSelectedCitation(c)}
                     hideTimestamp={Boolean(m.isStreaming)}
                     footer={
-                      m.id === latestModelId &&
-                      m.sender === 'model' &&
-                      !decisionPending &&
-                      !m.content.includes('模型自主分析')
+                      m.id === latestModelId && m.sender === 'model' && canShowInlineCandidatePanel && !m.adoptedSummary
                         ? candidatePanel
                         : null
                     }
@@ -609,6 +733,20 @@ export function ChatPage() {
                   </div>
                 ) : null}
                 {decisionPending && !decisionStreamingMessage?.content ? (
+                  <div className="flex justify-start">
+                    <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+                      <span className="inline-flex items-center">
+                        正在思考
+                        <span className="thinking-dots" aria-hidden>
+                          <span className="thinking-dot" />
+                          <span className="thinking-dot" />
+                          <span className="thinking-dot" />
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+                {adoptedPending && !adoptedStreamingMessage?.content ? (
                   <div className="flex justify-start">
                     <div className="max-w-[80%] rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
                       <span className="inline-flex items-center">

@@ -399,6 +399,44 @@ export const useConsultationDecisionStream = () => {
       ),
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({
+        queryKey: ['case', variables.consultationId, 'messages'],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['case', variables.consultationId, 'suggestions'],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['consultation', variables.consultationId, 'draft'],
+      })
+    },
+  })
+}
+
+export const useConsultationAdoptedSummaryStream = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: {
+      consultationId: string
+      adoptedDiseaseId: string
+      message: string
+      onDelta?: (delta: string, payload?: unknown) => void
+      onDone?: (payload?: unknown) => void
+      onError?: (error: Error) => void
+    }) =>
+      sendConsultationDialogueStream(
+        {
+          consultationId: args.consultationId,
+          message: args.message,
+          mode: 'adopted_summary',
+          adoptedDiseaseId: args.adoptedDiseaseId,
+        },
+        {
+          onDelta: args.onDelta,
+          onDone: args.onDone,
+          onError: args.onError,
+        },
+      ),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
         queryKey: ['case', variables.consultationId, 'suggestions'],
       })
       await queryClient.invalidateQueries({

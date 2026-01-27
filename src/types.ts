@@ -40,6 +40,8 @@ export interface ConsultationDialogue {
   extractedSymptoms: string[]
   candidateDiseases: ConsultationCandidateDisease[]
   normalizedUserSymptoms?: string[]
+  pendingSymptoms?: string[]
+  pendingSymptomGroups?: string[][]
   candidateSymptomDetails?: ConsultationCandidateSymptomDetail[]
   reasoningTree?: ConsultationReasoningTree | null
   followupQuestions: string[]
@@ -96,6 +98,7 @@ export interface CaseMessage {
   source?: SuggestionSource
   citations?: Citation[]
   isStreaming?: boolean
+  adoptedSummary?: boolean
 }
 
 export interface ConsultationSuggestion {
@@ -110,6 +113,8 @@ export interface ConsultationSuggestion {
   confirmedSymptoms?: string[]
   extractedSymptoms?: string[]
   normalizedUserSymptoms?: string[]
+  pendingSymptoms?: string[]
+  pendingSymptomGroups?: string[][]
   candidateSymptomDetails?: ConsultationCandidateSymptomDetail[]
   reasoningTree?: ConsultationReasoningTree | null
   decision?: ConsultationDecision | null

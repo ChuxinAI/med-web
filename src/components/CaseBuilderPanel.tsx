@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConsultationDraft, Patient } from '../types'
 import { PatientUpsertModal } from './PatientUpsertModal'
 import { getPatientAge } from '../lib/patient'
@@ -34,6 +34,7 @@ export function CaseBuilderPanel({
   const [patientQuery, setPatientQuery] = useState('')
   const [createPatientOpen, setCreatePatientOpen] = useState(false)
   const [saveNotice, setSaveNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
+  const autoSuggestedRef = useRef<Set<string>>(new Set())
 
   const updateLocalDraft = useCallback(
     (updater: (prev: ConsultationDraft) => ConsultationDraft) => {
@@ -53,12 +54,40 @@ export function CaseBuilderPanel({
   }, [draft.consultationId, draft.updatedAt])
 
   useEffect(() => {
+    autoSuggestedRef.current = new Set()
+  }, [draft.consultationId])
+
+  useEffect(() => {
     if (readOnly) return
-    if (!Array.isArray(suggestedSymptoms) || suggestedSymptoms.length === 0) return
-    const merged = mergeSymptoms(localDraft.symptoms, suggestedSymptoms)
+    if (!Array.isArray(suggestedSymptoms)) return
+    const normalizedSuggested = normalizeSymptomList(suggestedSymptoms)
+    const suggestedSet = new Set(normalizedSuggested)
+    const currentItems = splitSymptomsWithNormalized(localDraft.symptoms)
+    let nextItems = currentItems
+    if (localDraft.status.symptoms === 'suggested' && autoSuggestedRef.current.size > 0) {
+      const removeSet = new Set(
+        Array.from(autoSuggestedRef.current).filter((symptom) => !suggestedSet.has(symptom)),
+      )
+      if (removeSet.size > 0) {
+        nextItems = currentItems.filter((item) => !removeSet.has(item.normalized))
+      }
+    }
+    const currentSet = new Set(nextItems.map((item) => item.normalized))
+    const additions = normalizedSuggested.filter((item) => !currentSet.has(item))
+    if (additions.length === 0 && nextItems === currentItems) return
+    const merged = joinSymptoms([...nextItems.map((item) => item.raw), ...additions])
     if (merged === localDraft.symptoms) return
     setLocalDraft((prev) => {
       if (prev.symptoms === merged) return prev
+      additions.forEach((item) => autoSuggestedRef.current.add(item))
+      if (prev.status.symptoms === 'suggested') {
+        const mergedSet = new Set(splitSymptomsWithNormalized(merged).map((item) => item.normalized))
+        autoSuggestedRef.current.forEach((symptom) => {
+          if (!mergedSet.has(symptom)) {
+            autoSuggestedRef.current.delete(symptom)
+          }
+        })
+      }
       const next = {
         ...prev,
         symptoms: merged,
@@ -67,7 +96,7 @@ export function CaseBuilderPanel({
       onDraftChange?.(next)
       return next
     })
-  }, [localDraft.symptoms, onDraftChange, readOnly, suggestedSymptoms])
+  }, [localDraft.status.symptoms, localDraft.symptoms, onDraftChange, readOnly, suggestedSymptoms])
 
   const filteredPatients = useMemo(() => {
     const keyword = patientQuery.trim()
@@ -296,15 +325,36 @@ function statusPill(status: ConsultationDraft['status'][keyof ConsultationDraft[
   return 'bg-slate-100 text-slate-700'
 }
 
-function mergeSymptoms(current: string, incoming: string[]) {
-  const currentList = splitSymptoms(current)
-  const normalized = new Set(currentList)
-  incoming.forEach((item) => {
-    const trimmed = item.trim()
-    if (!trimmed) return
-    normalized.add(trimmed)
+function normalizeSymptom(value: string) {
+  return value.trim().replace(/\s+/g, ' ')
+}
+
+function normalizeSymptomList(list: string[]) {
+  const seen = new Set<string>()
+  const result: string[] = []
+  list.forEach((item) => {
+    const normalized = normalizeSymptom(item)
+    if (!normalized || seen.has(normalized)) return
+    seen.add(normalized)
+    result.push(normalized)
   })
-  return Array.from(normalized).join('、')
+  return result
+}
+
+function splitSymptomsWithNormalized(value: string) {
+  return splitSymptoms(value).map((raw) => ({ raw, normalized: normalizeSymptom(raw) }))
+}
+
+function joinSymptoms(items: string[]) {
+  const seen = new Set<string>()
+  const result: string[] = []
+  items.forEach((item) => {
+    const normalized = normalizeSymptom(item)
+    if (!normalized || seen.has(normalized)) return
+    seen.add(normalized)
+    result.push(normalized)
+  })
+  return result.join('、')
 }
 
 function splitSymptoms(value: string) {

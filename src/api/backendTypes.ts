@@ -137,6 +137,8 @@ export interface ConsultationDialogueDto {
   extracted_symptoms?: string[]
   candidate_diseases?: ConsultationCandidateDiseaseDto[]
   normalized_user_symptoms?: string[]
+  pending_symptoms?: string[]
+  pending_symptom_groups?: string[][]
   candidate_symptom_details?: ConsultationCandidateSymptomDetailDto[]
   reasoning_tree?: ConsultationReasoningTreeDto | null
   followup_questions?: string[]
@@ -150,6 +152,8 @@ export interface ConsultationSuggestionDto {
   extractions?: Record<string, unknown> | null
   extracted_symptoms?: string[]
   confirmed_symptoms?: string[]
+  pending_symptoms?: string[]
+  pending_symptom_groups?: string[][]
   next_questions: string[]
   candidate_diseases: ConsultationCandidateDiseaseDto[]
   normalized_user_symptoms?: string[]
