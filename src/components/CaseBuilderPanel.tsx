@@ -128,7 +128,7 @@ export function CaseBuilderPanel({
             >
               <span className="truncate">
                 {selectedPatient
-                  ? `${selectedPatient.name}${getPatientAge(selectedPatient) ? `（${getPatientAge(selectedPatient)}岁）` : ''}`
+                  ? `${selectedPatient.name}${formatGenderAge(selectedPatient) ? `（${formatGenderAge(selectedPatient)}）` : ''}`
                   : '选择/新建患者'}
               </span>
               <span className="whitespace-nowrap text-xs text-slate-400">{patientPickerOpen ? '收起' : '展开'}</span>
@@ -168,7 +168,7 @@ export function CaseBuilderPanel({
                       >
                         <span className="font-semibold text-ink">{p.name}</span>
                         <span className="flex items-center gap-2 text-xs text-slate-500">
-                          <span>{getPatientAge(p) ? `${getPatientAge(p)}岁` : ''}</span>
+                          <span>{formatGenderAge(p)}</span>
                         </span>
                       </button>
                     ))}
@@ -343,6 +343,14 @@ function normalizeSymptomList(list: string[]) {
 
 function splitSymptomsWithNormalized(value: string) {
   return splitSymptoms(value).map((raw) => ({ raw, normalized: normalizeSymptom(raw) }))
+}
+
+function formatGenderAge(patient: Patient) {
+  const age = getPatientAge(patient)
+  const parts: string[] = []
+  if (patient.gender) parts.push(patient.gender)
+  if (age != null) parts.push(`${age}岁`)
+  return parts.join('，')
 }
 
 function joinSymptoms(items: string[]) {
