@@ -91,7 +91,7 @@ export function CaseBuilderPanel({
       const next = {
         ...prev,
         symptoms: merged,
-        status: { ...prev.status, symptoms: 'suggested' },
+        status: { ...prev.status, symptoms: 'suggested' as const },
       }
       onDraftChange?.(next)
       return next
@@ -222,6 +222,7 @@ export function CaseBuilderPanel({
           status={localDraft.status.diagnosis}
           rows={3}
           readOnly={readOnly}
+          hideStatus
           onPickCandidate={(value) =>
             updateLocalDraft((prev) => ({
               ...prev,
@@ -244,6 +245,7 @@ export function CaseBuilderPanel({
           status={localDraft.status.formulaName}
           rows={3}
           readOnly={readOnly}
+          hideStatus
           onPickCandidate={(value) =>
             updateLocalDraft((prev) => ({
               ...prev,

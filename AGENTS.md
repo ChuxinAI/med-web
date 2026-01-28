@@ -76,6 +76,7 @@
 
 ## 注意事项
 - `/doctor/patients/:id` 页面发起问诊仍未打通 `patientId` 参数
+- 模型决策回复提供采纳入口，调用 `/doctor/consultations/extract-disease-formula` 抽取病症/方剂并写入草稿
 
 ## 错误记录
 - 2026-01-22：前端疾病字段曾与后端不一致（使用 `type`/`symptomDescription`/`differentiationMethod`），导致接口对接偏差；以后改动需先核对 `openapi.json` 字段。

@@ -22,6 +22,8 @@ export function DiseaseDetailModal({
   onClose: () => void
   onConfirm?: () => void
 }) {
+  void matchedSymptoms
+  void unmatchedSymptoms
   if (!open) return null
   if (typeof document === 'undefined') return null
 

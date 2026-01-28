@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
   useCaseMessages,
@@ -11,12 +12,14 @@ import {
   useDoctorPatients,
   useSendConsultationMessage,
   useUpdateConsultationDraft,
+  useExtractDiseaseFormula,
 } from '../api/queries'
 import { ConsultationCandidatePanel } from './ConsultationCandidatePanel'
 import { CaseBuilderModal } from './CaseBuilderModal'
 import { ChatMessage } from './ChatMessage'
 import { Card } from './Card'
 import { CaseBuilderPanel } from './CaseBuilderPanel'
+import { DecisionAdoptAction } from './DecisionAdoptAction'
 import {
   extractAssistantContent,
   extractAssistantCreatedAt,
@@ -28,6 +31,7 @@ import type { CaseMessage, ConsultationDraft, Disease } from '../types'
 export function DoctorWorkspace({ consultationId }: { consultationId?: string }) {
   const { caseId } = useParams()
   const activeId = consultationId ?? caseId
+  const queryClient = useQueryClient()
   const { data: messages } = useCaseMessages(activeId)
   const { data: suggestion } = useCaseSuggestions(activeId)
   const { data: draft } = useConsultationDraft(activeId)
@@ -38,6 +42,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   const sendMessage = useSendConsultationMessage()
   const decisionStream = useConsultationDecisionStream()
   const adoptedSummaryStream = useConsultationAdoptedSummaryStream()
+  const extractDiseaseFormula = useExtractDiseaseFormula()
 
   const [optimisticMessages, setOptimisticMessages] = useState<CaseMessage[]>([])
   const [streamingMessage, setStreamingMessage] = useState<CaseMessage | null>(null)
@@ -47,6 +52,10 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   const [candidatePending, setCandidatePending] = useState(false)
   const [decisionPending, setDecisionPending] = useState(false)
   const [adoptedPending, setAdoptedPending] = useState(false)
+  const [decisionReplyContent, setDecisionReplyContent] = useState<string | null>(null)
+  const [decisionReplyId, setDecisionReplyId] = useState<string | null>(null)
+  const [decisionAdopting, setDecisionAdopting] = useState(false)
+  const [decisionAdoptError, setDecisionAdoptError] = useState<string | null>(null)
   const [reasoningConfirmedSymptoms, setReasoningConfirmedSymptoms] = useState<string[]>([])
   const candidateSnapshotRef = useRef<typeof suggestion | null>(null)
   const draftSnapshotRef = useRef<ConsultationDraft | null>(null)
@@ -61,6 +70,10 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
     setCandidatePending(false)
     setDecisionPending(false)
     setAdoptedPending(false)
+    setDecisionReplyContent(null)
+    setDecisionReplyId(null)
+    setDecisionAdopting(false)
+    setDecisionAdoptError(null)
     setReasoningConfirmedSymptoms([])
     candidateSnapshotRef.current = null
     draftSnapshotRef.current = null
@@ -252,6 +265,39 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
     suggestion?.candidateSymptomDetails?.length,
   ])
 
+  const normalizedDecisionContent = decisionReplyContent?.trim() || null
+  const buildMessageFooter = (message: CaseMessage) => {
+    const matchesDecisionReply =
+      Boolean(normalizedDecisionContent) &&
+      message.sender === 'model' &&
+      !message.isStreaming &&
+      (message.id === decisionReplyId || message.content.trim() === normalizedDecisionContent)
+    const decisionFooter = matchesDecisionReply ? (
+      <DecisionAdoptAction
+        loading={decisionAdopting}
+        error={decisionAdoptError}
+        onAdopt={() => void handleAdoptDecisionReply(message.content)}
+      />
+    ) : null
+    const candidateFooter =
+      message.id === latestModelId &&
+      message.sender === 'model' &&
+      canShowInlineCandidatePanel &&
+      !message.adoptedSummary
+        ? candidatePanel
+        : null
+    if (!decisionFooter && !candidateFooter) return null
+    if (decisionFooter && candidateFooter) {
+      return (
+        <div className="space-y-2">
+          {decisionFooter}
+          {candidateFooter}
+        </div>
+      )
+    }
+    return decisionFooter ?? candidateFooter
+  }
+
   const send = async () => {
     if (!activeId) return
     const content = input.trim()
@@ -429,6 +475,9 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
   const handleRequestDecision = async () => {
     if (!activeId || decisionStream.isPending || decisionPending) return
     const previousDecisionMessage = decisionStreamingMessage
+    setDecisionReplyContent(null)
+    setDecisionReplyId(null)
+    setDecisionAdoptError(null)
     setDecisionPending(true)
     const streamMessage: CaseMessage = {
       id: `decision-stream-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -438,6 +487,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
       isStreaming: true,
     }
     setDecisionStreamingMessage(streamMessage)
+    setDecisionReplyId(streamMessage.id)
     const draftSnapshot = draftSnapshotRef.current
     if (draftSnapshot) {
       try {
@@ -487,15 +537,82 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
                 }
               : prev,
           )
+          setDecisionReplyContent(finalText || payloadReply || streamMessage.content)
+          setDecisionReplyId(streamMessage.id)
         },
         onError: () => {
           setDecisionStreamingMessage(null)
+          setDecisionReplyContent(null)
+          setDecisionReplyId(null)
         },
       })
     } catch {
       setDecisionStreamingMessage(null)
+      setDecisionReplyContent(null)
+      setDecisionReplyId(null)
     } finally {
       setDecisionPending(false)
+    }
+  }
+
+  const handleAdoptDecisionReply = async (content: string) => {
+    if (!activeId || !draft) return
+    const text = content.trim()
+    if (!text) return
+    setDecisionAdoptError(null)
+    setDecisionAdopting(true)
+    const previousDraft = draftSnapshotRef.current ?? draft
+    try {
+      const items = await extractDiseaseFormula.mutateAsync({ text })
+      const extracted = items.find(
+        (item) => (item.disease && item.disease.trim()) || (item.formula && item.formula.trim()),
+      )
+      if (!extracted) {
+        setDecisionAdoptError('未提取到病症或方剂')
+        return
+      }
+      const nextDiagnosis = extracted.disease?.trim() || draft.diagnosis
+      const nextFormula = extracted.formula?.trim() || draft.formulaName
+      const nextDraft: ConsultationDraft = {
+        ...draft,
+        diagnosis: nextDiagnosis,
+        formulaName: nextFormula,
+        status: {
+          ...draft.status,
+          diagnosis: extracted.disease?.trim() ? 'confirmed' : draft.status.diagnosis,
+          formulaName: extracted.formula?.trim() ? 'confirmed' : draft.status.formulaName,
+        },
+        updatedAt: new Date().toISOString(),
+      }
+      draftSnapshotRef.current = nextDraft
+      queryClient.setQueryData(['consultation', activeId, 'draft'], nextDraft)
+      try {
+        const updated = await updateDraft.mutateAsync({
+          consultationId: activeId,
+          patch: {
+            diagnosis: nextDiagnosis,
+            formulaName: nextFormula,
+          },
+        })
+        const normalized: ConsultationDraft = {
+          ...updated,
+          status: nextDraft.status,
+        }
+        draftSnapshotRef.current = normalized
+        queryClient.setQueryData(['consultation', activeId, 'draft'], normalized)
+      } catch (error) {
+        setDecisionAdoptError(
+          error instanceof Error ? error.message : '保存失败，请稍后重试',
+        )
+        queryClient.setQueryData(['consultation', activeId, 'draft'], previousDraft)
+        draftSnapshotRef.current = previousDraft
+      }
+    } catch (error) {
+      setDecisionAdoptError(
+        error instanceof Error ? error.message : '抽取失败，请稍后重试',
+      )
+    } finally {
+      setDecisionAdopting(false)
     }
   }
 
@@ -557,11 +674,7 @@ export function DoctorWorkspace({ consultationId }: { consultationId?: string })
                   key={m.id}
                   message={m}
                   hideTimestamp={Boolean(m.isStreaming)}
-                  footer={
-                    m.id === latestModelId && m.sender === 'model' && canShowInlineCandidatePanel && !m.adoptedSummary
-                      ? candidatePanel
-                      : null
-                  }
+                  footer={buildMessageFooter(m)}
                 />
               ))}
               {decisionPending && !decisionStreamingMessage?.content ? (

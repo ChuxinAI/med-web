@@ -18,6 +18,8 @@ import type {
   ConsultationMessageDto,
   ConsultationSuggestionDto,
   ConsultationSummaryDto,
+  DiseaseFormulaExtractItemDto,
+  DiseaseFormulaExtractResponseDto,
   DiseaseDto,
   PageMetaDto,
   PaginatedResponseDto,
@@ -512,6 +514,19 @@ export async function sendConsultationDialogueStream(
       ? (payload as ConsultationDialogueDto)
       : ({ reply: '' } as ConsultationDialogueDto)
   return toConsultationDialogue(dto)
+}
+
+export async function extractDiseaseFormula(
+  text: string,
+): Promise<DiseaseFormulaExtractItemDto[]> {
+  const dto = await apiRequest<DiseaseFormulaExtractResponseDto>(
+    '/doctor/consultations/extract-disease-formula',
+    {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    },
+  )
+  return dto.items ?? []
 }
 
 export async function fetchDiseases(): Promise<Disease[]> {

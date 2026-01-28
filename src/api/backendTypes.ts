@@ -162,6 +162,15 @@ export interface ConsultationSuggestionDto {
   fallback_by_model?: boolean
 }
 
+export interface DiseaseFormulaExtractItemDto {
+  disease?: string | null
+  formula?: string | null
+}
+
+export interface DiseaseFormulaExtractResponseDto {
+  items: DiseaseFormulaExtractItemDto[]
+}
+
 export interface DiseaseDto {
   id: number
   name: string

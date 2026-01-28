@@ -21,6 +21,7 @@ import {
   fetchPatientDetails,
   fetchSuggestions,
   fetchUsers,
+  extractDiseaseFormula,
   importDiseasesFromFile,
   resetAdminUserPassword,
   sendConsultationDialogue,
@@ -422,6 +423,11 @@ export const useConsultationDecisionStream = () => {
     },
   })
 }
+
+export const useExtractDiseaseFormula = () =>
+  useMutation({
+    mutationFn: (args: { text: string }) => extractDiseaseFormula(args.text),
+  })
 
 export const useConsultationAdoptedSummaryStream = () => {
   const queryClient = useQueryClient()
