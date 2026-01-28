@@ -190,7 +190,7 @@ main() {
   write_env
   build_project
   deploy_dist
-  configure_nginx
+  #configure_nginx
 
   echo "Deploy complete."
 }

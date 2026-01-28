@@ -35,6 +35,8 @@ export function CaseBuilderPanel({
   const [createPatientOpen, setCreatePatientOpen] = useState(false)
   const [saveNotice, setSaveNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
   const autoSuggestedRef = useRef<Set<string>>(new Set())
+  const lastDraftRef = useRef<ConsultationDraft>(draft)
+  const lastSuggestedRef = useRef<string[]>([])
 
   const updateLocalDraft = useCallback(
     (updater: (prev: ConsultationDraft) => ConsultationDraft) => {
@@ -50,52 +52,106 @@ export function CaseBuilderPanel({
   )
 
   useEffect(() => {
-    setLocalDraft(draft)
-  }, [draft.consultationId, draft.updatedAt])
+    const previousDraft = lastDraftRef.current
+    lastDraftRef.current = draft
+    setLocalDraft((prev) => {
+      if (prev.consultationId !== draft.consultationId) return draft
+      const normalizedServerSymptoms = normalizeSymptomsFromText(draft.symptoms)
+      const normalizedPreviousServer = normalizeSymptomsFromText(previousDraft.symptoms)
+      const normalizedPrevLocal = normalizeSymptomsFromText(prev.symptoms)
+      const serverSymptomsChanged = !areSymptomListsEqual(normalizedServerSymptoms, normalizedPreviousServer)
+      if (!serverSymptomsChanged && !areSymptomListsEqual(normalizedPrevLocal, normalizedServerSymptoms)) {
+        return { ...draft, symptoms: prev.symptoms, status: { ...draft.status, symptoms: prev.status.symptoms } }
+      }
+      if (areSymptomListsEqual(normalizedPrevLocal, normalizedServerSymptoms)) {
+        return { ...draft, status: { ...draft.status, symptoms: prev.status.symptoms } }
+      }
+      if (!serverSymptomsChanged) {
+        return { ...draft, status: { ...draft.status, symptoms: draft.status.symptoms } }
+      }
+      const serverItems = splitSymptomsWithNormalized(draft.symptoms)
+      const serverSet = new Set(normalizedServerSymptoms)
+      const previousServerSet = new Set(normalizedPreviousServer)
+      const allowKeepLocal = prev.status.symptoms === 'edited' || prev.status.symptoms === 'confirmed'
+      const localExtras = splitSymptomsWithNormalized(prev.symptoms)
+        .filter(
+          (item) =>
+            !serverSet.has(item.normalized) &&
+            (allowKeepLocal || !previousServerSet.has(item.normalized)),
+        )
+        .map((item) => item.raw)
+      const mergedSymptoms = joinSymptoms([...serverItems.map((item) => item.raw), ...localExtras])
+      const keepStatus = allowKeepLocal || localExtras.length > 0
+      return {
+        ...draft,
+        symptoms: mergedSymptoms,
+        status: {
+          ...draft.status,
+          symptoms: keepStatus ? prev.status.symptoms : draft.status.symptoms,
+        },
+      }
+    })
+  }, [draft])
 
   useEffect(() => {
     autoSuggestedRef.current = new Set()
+    lastSuggestedRef.current = []
   }, [draft.consultationId])
 
   useEffect(() => {
     if (readOnly) return
     if (!Array.isArray(suggestedSymptoms)) return
     const normalizedSuggested = normalizeSymptomList(suggestedSymptoms)
+    const previousSuggested = lastSuggestedRef.current
+    const previousSuggestedSet = new Set(previousSuggested)
+    const suggestionsChanged = !areSymptomListsEqual(normalizedSuggested, previousSuggested)
+    if (!suggestionsChanged && (localDraft.status.symptoms === 'edited' || localDraft.status.symptoms === 'confirmed')) {
+      return
+    }
     const suggestedSet = new Set(normalizedSuggested)
     const currentItems = splitSymptomsWithNormalized(localDraft.symptoms)
     let nextItems = currentItems
-    if (localDraft.status.symptoms === 'suggested' && autoSuggestedRef.current.size > 0) {
-      const removeSet = new Set(
-        Array.from(autoSuggestedRef.current).filter((symptom) => !suggestedSet.has(symptom)),
-      )
-      if (removeSet.size > 0) {
-        nextItems = currentItems.filter((item) => !removeSet.has(item.normalized))
-      }
+    const removeSet = new Set(
+      Array.from(autoSuggestedRef.current).filter((symptom) => !suggestedSet.has(symptom)),
+    )
+    if (removeSet.size > 0) {
+      nextItems = currentItems.filter((item) => !removeSet.has(item.normalized))
     }
     const currentSet = new Set(nextItems.map((item) => item.normalized))
-    const additions = normalizedSuggested.filter((item) => !currentSet.has(item))
-    if (additions.length === 0 && nextItems === currentItems) return
+    const candidateAdditions =
+      localDraft.status.symptoms === 'edited' || localDraft.status.symptoms === 'confirmed'
+        ? normalizedSuggested.filter((item) => !previousSuggestedSet.has(item))
+        : normalizedSuggested
+    const additions = candidateAdditions.filter((item) => !currentSet.has(item))
+    if (additions.length === 0 && nextItems === currentItems) {
+      lastSuggestedRef.current = normalizedSuggested
+      return
+    }
     const merged = joinSymptoms([...nextItems.map((item) => item.raw), ...additions])
-    if (merged === localDraft.symptoms) return
+    if (merged === localDraft.symptoms) {
+      lastSuggestedRef.current = normalizedSuggested
+      return
+    }
     setLocalDraft((prev) => {
-      if (prev.symptoms === merged) return prev
+      const status =
+        prev.status.symptoms === 'edited' || prev.status.symptoms === 'confirmed'
+          ? prev.status.symptoms
+          : ('suggested' as const)
       additions.forEach((item) => autoSuggestedRef.current.add(item))
-      if (prev.status.symptoms === 'suggested') {
-        const mergedSet = new Set(splitSymptomsWithNormalized(merged).map((item) => item.normalized))
-        autoSuggestedRef.current.forEach((symptom) => {
-          if (!mergedSet.has(symptom)) {
-            autoSuggestedRef.current.delete(symptom)
-          }
-        })
-      }
+      autoSuggestedRef.current.forEach((symptom) => {
+        if (!suggestedSet.has(symptom)) {
+          autoSuggestedRef.current.delete(symptom)
+        }
+      })
       const next = {
         ...prev,
         symptoms: merged,
-        status: { ...prev.status, symptoms: 'suggested' as const },
+        status: { ...prev.status, symptoms: status },
       }
       onDraftChange?.(next)
       return next
     })
+    lastSuggestedRef.current = normalizedSuggested
   }, [localDraft.status.symptoms, localDraft.symptoms, onDraftChange, readOnly, suggestedSymptoms])
 
   const filteredPatients = useMemo(() => {
@@ -211,7 +267,14 @@ export function CaseBuilderPanel({
             updateLocalDraft((prev) => ({
               ...prev,
               symptoms: value,
-              status: { ...prev.status, symptoms: value.trim() ? 'edited' : 'empty' },
+              status: {
+                ...prev.status,
+                symptoms: value.trim()
+                  ? 'edited'
+                  : prev.symptoms.trim()
+                    ? 'edited'
+                    : 'empty',
+              },
             }))
           }
         />
@@ -341,6 +404,22 @@ function normalizeSymptomList(list: string[]) {
     result.push(normalized)
   })
   return result
+}
+
+function normalizeSymptomsFromText(value: string) {
+  return normalizeSymptomList(splitSymptoms(value))
+}
+
+function areSymptomListsEqual(listA: string[], listB: string[]) {
+  if (listA.length !== listB.length) return false
+  if (listA.length === 0) return true
+  const setA = new Set(listA)
+  const setB = new Set(listB)
+  if (setA.size !== setB.size) return false
+  for (const item of setA) {
+    if (!setB.has(item)) return false
+  }
+  return true
 }
 
 function splitSymptomsWithNormalized(value: string) {
