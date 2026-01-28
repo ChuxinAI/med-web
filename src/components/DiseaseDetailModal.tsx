@@ -4,6 +4,8 @@ import type { Disease } from '../types'
 export function DiseaseDetailModal({
   open,
   disease,
+  loading,
+  error,
   matchedSymptoms,
   unmatchedSymptoms,
   confirmedSymptoms,
@@ -12,6 +14,8 @@ export function DiseaseDetailModal({
 }: {
   open: boolean
   disease?: Disease
+  loading?: boolean
+  error?: string | null
   matchedSymptoms?: string[]
   unmatchedSymptoms?: string[]
   confirmedSymptoms?: string[]
@@ -38,7 +42,15 @@ export function DiseaseDetailModal({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto bg-slate-50 p-4">
-          {!disease ? (
+          {loading ? (
+            <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
+              正在获取最新病症详情...
+            </div>
+          ) : error ? (
+            <div className="rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm text-rose-600">
+              {error}
+            </div>
+          ) : !disease ? (
             <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
               未找到对应病症详情。
             </div>

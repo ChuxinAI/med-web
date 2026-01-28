@@ -81,6 +81,7 @@
 - 2026-01-22：前端疾病字段曾与后端不一致（使用 `type`/`symptomDescription`/`differentiationMethod`），导致接口对接偏差；以后改动需先核对 `openapi.json` 字段。
 - 2026-01-23：问诊返回存在 `id` 与 `code` 字段时，前端只使用 `id`，不要依赖 `code`。
 - 2026-01-24：`rsync --delete` 目标目录不要与源码目录同级混用，否则会清理掉源码；建议部署到独立子目录（如 `site/`）。
+- 2026-01-28：新增/编辑/导入病症后未失效 `catalog` 查询，医生端候选详情缺失；病症管理相关 mutation 需同步失效 `['catalog']`。
 
 ## 后端接口文档
 - 通过 http://localhost:8100/docs 确认接口调用是否正确及是否有新功能

@@ -7,6 +7,7 @@ import type {
 } from '../types'
 import { DiseaseDetailModal } from './DiseaseDetailModal'
 import { readReasoningConfirmedSymptoms } from '../lib/reasoningStorage'
+import { fetchCatalog } from '../api/backendApi'
 
 const MAX_REASONING_TURNS = 12
 
@@ -36,13 +37,19 @@ export function ConsultationCandidatePanel({
   readOnly?: boolean
 }) {
   const [selectedCandidate, setSelectedCandidate] = useState<ConsultationCandidateDisease | null>(null)
+  const [selectedDisease, setSelectedDisease] = useState<Disease | null>(null)
+  const [selectedDiseaseLoading, setSelectedDiseaseLoading] = useState(false)
+  const [selectedDiseaseError, setSelectedDiseaseError] = useState<string | null>(null)
   const [history, setHistory] = useState<ReasoningHistoryItem[]>([])
   const [yesSymptoms, setYesSymptoms] = useState<string[]>([])
   const [noSymptoms, setNoSymptoms] = useState<string[]>([])
   const hasHydratedRef = useRef(false)
   const hasUserInteractedRef = useRef(false)
 
-  const candidates = suggestion?.candidateDiseases ?? []
+  const candidates = useMemo(
+    () => dedupeCandidates(suggestion?.candidateDiseases ?? []),
+    [suggestion?.candidateDiseases],
+  )
   const normalizedUserSymptoms = suggestion?.normalizedUserSymptoms ?? []
   const pendingSymptomGroups = useMemo(() => {
     const rawGroups = suggestion?.pendingSymptomGroups ?? []
@@ -52,11 +59,15 @@ export function ConsultationCandidatePanel({
     () => normalizeSymptomList(suggestion?.pendingSymptoms ?? []),
     [suggestion?.pendingSymptoms],
   )
-  const candidateSymptomDetails = suggestion?.candidateSymptomDetails ?? []
+  const candidateSymptomDetails = useMemo(
+    () => dedupeCandidateSymptomDetails(suggestion?.candidateSymptomDetails ?? []),
+    [suggestion?.candidateSymptomDetails],
+  )
   const confirmedSymptoms = useMemo(
     () => dedupeSymptoms([...normalizedUserSymptoms, ...yesSymptoms]),
     [normalizedUserSymptoms, yesSymptoms],
   )
+  const resolvedUserSymptoms = useMemo(() => expandSymptoms(confirmedSymptoms), [confirmedSymptoms])
   const confirmedSet = useMemo(
     () => new Set(confirmedSymptoms.map(normalizeSymptom).filter(Boolean)),
     [confirmedSymptoms],
@@ -66,7 +77,6 @@ export function ConsultationCandidatePanel({
     ;(catalog ?? []).forEach((item) => map.set(item.id, item))
     return map
   }, [catalog])
-  const selectedDisease = selectedCandidate ? diseaseMap.get(selectedCandidate.id) : undefined
   const candidateMatchedMap = useMemo(() => {
     const map = new Map<string, string[]>()
     candidates.forEach((item) => {
@@ -104,15 +114,32 @@ export function ConsultationCandidatePanel({
     })
     return map
   }, [candidateMatchedMap, candidateSymptomDetails, normalizedUserSymptoms, noSymptoms, yesSymptoms])
-  const filteredCandidates = useMemo(() => {
-    return candidates.slice().sort((a, b) => {
-      const scoreA = resolveProbability(a, symptomDetailMap, confirmedSymptoms, diseaseMap)
-      const scoreB = resolveProbability(b, symptomDetailMap, confirmedSymptoms, diseaseMap)
-      if (scoreB !== scoreA) return scoreB - scoreA
-      return a.name.localeCompare(b.name, 'zh-Hans-CN')
-    })
-  }, [candidates, confirmedSymptoms, diseaseMap, symptomDetailMap])
-  const visibleCandidates = filteredCandidates
+  const scoredCandidates = useMemo(
+    () =>
+      candidates.map((candidate) => ({
+        candidate,
+        probability: resolveProbability(
+          candidate,
+          symptomDetailMap,
+          confirmedSymptoms,
+          diseaseMap,
+          resolvedUserSymptoms,
+        ),
+      })),
+    [candidates, confirmedSymptoms, diseaseMap, resolvedUserSymptoms, symptomDetailMap],
+  )
+  const visibleCandidates = useMemo(() => {
+    const hasResolvedSymptoms = resolvedUserSymptoms.length > 0
+    return scoredCandidates
+      // Hide candidates that drop to 0% after we recompute with user symptoms to avoid clutter.
+      .filter(({ probability }) => !hasResolvedSymptoms || (probability ?? 0) > 0)
+      .sort((a, b) => {
+        const scoreA = a.probability ?? 0
+        const scoreB = b.probability ?? 0
+        if (scoreB !== scoreA) return scoreB - scoreA
+        return a.candidate.name.localeCompare(b.candidate.name, 'zh-Hans-CN')
+      })
+  }, [resolvedUserSymptoms, scoredCandidates])
   const selectedSymptomDetail = selectedCandidate ? symptomDetailMap.get(selectedCandidate.id) : undefined
   const askedSet = useMemo(() => {
     const raw = [...normalizedUserSymptoms, ...yesSymptoms, ...noSymptoms]
@@ -145,6 +172,46 @@ export function ConsultationCandidatePanel({
     hasHydratedRef.current = false
     hasUserInteractedRef.current = false
   }, [persistenceKey])
+
+  useEffect(() => {
+    if (!selectedCandidate) return
+    const stillExists = candidates.some((item) => item.id === selectedCandidate.id)
+    if (!stillExists) {
+      setSelectedCandidate(null)
+    }
+  }, [candidates, selectedCandidate])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedCandidate) {
+      setSelectedDisease(null)
+      setSelectedDiseaseError(null)
+      setSelectedDiseaseLoading(false)
+      return () => {
+        cancelled = true
+      }
+    }
+    setSelectedDisease(diseaseMap.get(selectedCandidate.id) ?? null)
+    setSelectedDiseaseError(null)
+    setSelectedDiseaseLoading(true)
+    fetchCatalog()
+      .then((items) => {
+        if (cancelled) return
+        const found = items.find((item) => item.id === selectedCandidate.id) ?? null
+        setSelectedDisease(found)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSelectedDiseaseError('获取病症详情失败，请稍后重试')
+      })
+      .finally(() => {
+        if (cancelled) return
+        setSelectedDiseaseLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [diseaseMap, selectedCandidate])
 
   useEffect(() => {
     if (!persistenceKey || !baseCandidateKey) {
@@ -226,17 +293,14 @@ export function ConsultationCandidatePanel({
       {!candidateLoading && visibleCandidates.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-semibold text-slate-500">候选病症：</span>
-          {visibleCandidates.map((item) => (
+          {visibleCandidates.map(({ candidate, probability }) => (
             <button
-              key={`${item.id}-${item.name}`}
+              key={`${candidate.id}-${candidate.name}`}
               type="button"
-              onClick={() => setSelectedCandidate(item)}
-              className={resolveCandidateClass(
-                resolveProbability(item, symptomDetailMap, confirmedSymptoms, diseaseMap),
-              )}
+              onClick={() => setSelectedCandidate(candidate)}
+              className={resolveCandidateClass(probability)}
             >
-              {item.name}{' '}
-              {formatProbability(resolveProbability(item, symptomDetailMap, confirmedSymptoms, diseaseMap))}
+              {candidate.name} {formatProbability(probability)}
             </button>
           ))}
         </div>
@@ -249,7 +313,7 @@ export function ConsultationCandidatePanel({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-semibold text-slate-500">推理选择</span>
             <div className="flex items-center gap-2 text-[11px] text-slate-400">
-              <span>候选数 {candidates.length}</span>
+              <span>候选数 {visibleCandidates.length}</span>
               <button
                 type="button"
                 onClick={handleBack}
@@ -308,13 +372,15 @@ export function ConsultationCandidatePanel({
 
       <DiseaseDetailModal
         open={Boolean(selectedCandidate)}
-        disease={selectedDisease}
+        disease={selectedDisease ?? undefined}
+        loading={selectedDiseaseLoading}
+        error={selectedDiseaseError}
         matchedSymptoms={selectedSymptomDetail?.matchedSymptoms}
         unmatchedSymptoms={selectedSymptomDetail?.unmatchedSymptoms}
         confirmedSymptoms={confirmedSymptoms}
         onClose={() => setSelectedCandidate(null)}
         onConfirm={
-          selectedDisease && selectedCandidate && onAdoptDisease && !readOnly
+          selectedDisease && selectedCandidate && onAdoptDisease && !readOnly && !selectedDiseaseLoading
             ? () => {
                 onAdoptDisease(selectedDisease, selectedCandidate)
                 setSelectedCandidate(null)
@@ -337,6 +403,7 @@ function resolveProbability(
   symptomDetailMap: Map<string, CandidateSymptomDetailWithPartial>,
   confirmedSymptoms: string[],
   diseaseMap: Map<string, Disease>,
+  resolvedUserSymptoms?: string[],
 ) {
   const detail = symptomDetailMap.get(candidate.id)
   const candidateSymptoms = detail ? expandSymptoms(detail.symptoms) : []
@@ -347,8 +414,8 @@ function resolveProbability(
       ? fallbackSymptoms
       : candidateSymptoms
   if (resolvedCandidateSymptoms.length === 0) return candidate.probability
-  const userSymptoms = expandSymptoms(confirmedSymptoms)
-  if (userSymptoms.length === 0) return 0
+  const userSymptoms = resolvedUserSymptoms ?? expandSymptoms(confirmedSymptoms)
+  if (userSymptoms.length === 0) return candidate.probability
   const totalScore = resolvedCandidateSymptoms.reduce((sum, symptom) => {
     return sum + resolveSymptomMatchScore(symptom, userSymptoms)
   }, 0)
@@ -478,6 +545,53 @@ function dedupeSymptoms(items: string[]) {
     result.push(item)
   })
   return result
+}
+
+function dedupeCandidates(list: ConsultationCandidateDisease[]) {
+  const map = new Map<string, ConsultationCandidateDisease>()
+  list.forEach((item) => {
+    const key = item.id || item.name
+    if (!key) return
+    const existing = map.get(key)
+    if (!existing) {
+      map.set(key, { ...item })
+      return
+    }
+    const mergedMatched = mergeSymptoms(existing.matchedSymptoms ?? [], item.matchedSymptoms ?? [])
+    const mergedScore =
+      existing.score == null && item.score == null
+        ? undefined
+        : Math.max(existing.score ?? Number.NEGATIVE_INFINITY, item.score ?? Number.NEGATIVE_INFINITY)
+    map.set(key, {
+      ...existing,
+      ...item,
+      probability: Math.max(existing.probability ?? 0, item.probability ?? 0),
+      matchedSymptoms: mergedMatched,
+      score: Number.isFinite(mergedScore ?? NaN) ? mergedScore : undefined,
+    })
+  })
+  return Array.from(map.values())
+}
+
+function dedupeCandidateSymptomDetails(list: ConsultationCandidateSymptomDetail[]) {
+  const map = new Map<string, ConsultationCandidateSymptomDetail>()
+  list.forEach((detail) => {
+    const key = detail.id || detail.name
+    if (!key) return
+    const existing = map.get(key)
+    if (!existing) {
+      map.set(key, { ...detail })
+      return
+    }
+    map.set(key, {
+      ...existing,
+      ...detail,
+      symptoms: mergeSymptoms(existing.symptoms, detail.symptoms),
+      matchedSymptoms: mergeSymptoms(existing.matchedSymptoms, detail.matchedSymptoms),
+      unmatchedSymptoms: mergeSymptoms(existing.unmatchedSymptoms, detail.unmatchedSymptoms),
+    })
+  })
+  return Array.from(map.values())
 }
 
 type ReasoningHistoryItem = {

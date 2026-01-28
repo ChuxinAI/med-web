@@ -78,7 +78,7 @@ export function ChatPage() {
       ?.id ?? null
   }, [doctorCases])
   const { data: patients } = useDoctorPatients()
-  const { data: catalog } = useCatalog()
+  const { data: catalog, refetch: refetchCatalog } = useCatalog()
   const createConsultation = useCreateConsultation()
   const createPatient = useCreateDoctorPatient()
   const { data: messages, error: messagesError } = useCaseMessages(consultationId ?? undefined)
@@ -88,6 +88,12 @@ export function ChatPage() {
   const sendMessage = useSendConsultationMessage()
   const decisionStream = useConsultationDecisionStream()
   const adoptedSummaryStream = useConsultationAdoptedSummaryStream()
+  const candidateIdsKey = useMemo(() => {
+    const ids = (suggestion?.candidateDiseases ?? []).map((item) => item.id).filter(Boolean)
+    if (ids.length === 0) return null
+    return ids.slice().sort().join('|')
+  }, [suggestion?.candidateDiseases])
+  const lastCatalogRefreshKeyRef = useRef<string | null>(null)
 
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
@@ -194,13 +200,23 @@ export function ChatPage() {
     suggestion?.candidateSymptomDetails?.length,
   ])
 
-
   useEffect(() => {
     if (!candidatePending) return
     if (suggestion !== candidateSnapshotRef.current) {
       setCandidatePending(false)
     }
   }, [candidatePending, suggestion])
+
+  useEffect(() => {
+    if (!catalog) return
+    if (!candidateIdsKey) return
+    const catalogIds = new Set(catalog.map((item) => item.id))
+    const hasMissing = (suggestion?.candidateDiseases ?? []).some((item) => item.id && !catalogIds.has(item.id))
+    if (!hasMissing) return
+    if (lastCatalogRefreshKeyRef.current === candidateIdsKey) return
+    lastCatalogRefreshKeyRef.current = candidateIdsKey
+    void refetchCatalog()
+  }, [catalog, candidateIdsKey, refetchCatalog, suggestion?.candidateDiseases])
 
   const canSend = useMemo(() => input.trim().length > 0 && !pending, [input, pending])
   const transcript = useMemo(() => {
@@ -321,6 +337,26 @@ export function ChatPage() {
     if (!streamingMatchId) return
     setStreamingMatchId(null)
   }, [streamingMatchId, streamingMessage])
+  useEffect(() => {
+    if (!decisionStreamingMessage || decisionStreamingMessage.isStreaming) return
+    if (!messages || messages.length === 0) return
+    const matched = messages.find(
+      (message) => message.sender === 'model' && message.content === decisionStreamingMessage.content,
+    )
+    if (!matched) return
+    setDecisionStreamingMessage(null)
+    setDecisionPending(false)
+  }, [decisionStreamingMessage, messages])
+  useEffect(() => {
+    if (!adoptedStreamingMessage || adoptedStreamingMessage.isStreaming) return
+    if (!messages || messages.length === 0) return
+    const matched = messages.find(
+      (message) => message.sender === 'model' && message.content === adoptedStreamingMessage.content,
+    )
+    if (!matched) return
+    setAdoptedStreamingMessage(null)
+    setAdoptedPending(false)
+  }, [adoptedStreamingMessage, messages])
 
   const suggestedSymptoms = useMemo(() => {
     if (reasoningConfirmedSymptoms.length > 0) return reasoningConfirmedSymptoms
@@ -329,10 +365,19 @@ export function ChatPage() {
 
   useEffect(() => {
     if (!notice) return
+    if (notice.tone !== 'info') return
     if (transcript.length > 0 || !isDraftEmpty) {
       setNotice(null)
     }
   }, [isDraftEmpty, notice, transcript.length])
+
+  useEffect(() => {
+    if (!notice) return
+    if (notice.tone !== 'error') return
+    if (draft?.patientId) {
+      setNotice(null)
+    }
+  }, [draft?.patientId, notice])
   const caseBuilder = !consultationId || !draft ? (
     <div className="text-sm text-slate-600">正在加载...</div>
   ) : (
@@ -368,6 +413,11 @@ export function ChatPage() {
     const content = input.trim()
     if (!content || pending) return
     if (!consultationId) return
+    const draftSnapshot = draftSnapshotRef.current ?? draft
+    if (!draftSnapshot?.patientId) {
+      setNotice({ tone: 'error', message: '请先关联患者后再发送问诊对话。' })
+      return
+    }
     const tempMessage: CaseMessage = {
       id: `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       sender: 'doctor',
@@ -392,7 +442,6 @@ export function ChatPage() {
     candidateSnapshotRef.current = suggestion ?? null
     setCandidatePending(true)
     setPending(true)
-    const draftSnapshot = draftSnapshotRef.current
     if (draftSnapshot) {
       try {
         await updateDraft.mutateAsync({
