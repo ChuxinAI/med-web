@@ -9,6 +9,7 @@ MODE="online"
 DOMAIN="_"
 API_BASE=""
 ROOT_DIR="/home/work/med"
+WEB_PORT="8100"
 SITE_DIR=""
 SRC_DIR=""
 
@@ -24,6 +25,7 @@ Options:
   --mode      Build mode: online|sandbox|prod (default: online)
   --domain    Nginx server_name (default: _)
   --api-base  VITE_API_BASE_URL (optional)
+  --web-port  Nginx listen port for the static site (default: 8100)
   --root      Deploy root (default: /home/work/med)
 EOF
 }
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --mode) MODE="$2"; shift 2 ;;
     --domain) DOMAIN="$2"; shift 2 ;;
     --api-base) API_BASE="$2"; shift 2 ;;
+    --web-port) WEB_PORT="$2"; shift 2 ;;
     --root) ROOT_DIR="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1"; usage; exit 1 ;;
@@ -150,7 +153,7 @@ configure_nginx() {
   local conf="/etc/nginx/conf.d/med-web.conf"
   sudo tee "$conf" >/dev/null <<EOF
 server {
-  listen 80;
+  listen ${WEB_PORT};
   server_name ${DOMAIN};
 
   root ${SITE_DIR};

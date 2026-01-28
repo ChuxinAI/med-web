@@ -21,6 +21,7 @@
 ## 环境配置
 - 读取方式：Vite env（`import.meta.env`）
 - 当前使用：`VITE_API_BASE_URL`（默认 `http://localhost:8100`）
+- Online 环境：前端对外端口 8100，API 地址见 `.env.online`
 - 环境文件：
   - `.env.sandbox`：sandbox 环境
   - `.env.online`：online 环境
