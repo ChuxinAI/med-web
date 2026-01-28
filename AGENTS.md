@@ -11,7 +11,7 @@
 
 ## 常用命令
 - 安装依赖：`npm install`
-- 本地开发：`npm run dev`（默认端口 5174）
+- 本地开发：`npm run dev`（默认端口 5174，可用 `VITE_DEV_PORT`/`PORT` 覆盖；online 模式默认 8100）
 - 本地开发（sandbox）：`npm run dev:sandbox`
 - 本地开发（online）：`npm run dev:online`
 - 构建：`npm run build`
