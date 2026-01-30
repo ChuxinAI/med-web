@@ -37,6 +37,7 @@ export function CaseBuilderPanel({
   const autoSuggestedRef = useRef<Set<string>>(new Set())
   const lastDraftRef = useRef<ConsultationDraft>(draft)
   const lastSuggestedRef = useRef<string[]>([])
+  const autoPromptPatientRef = useRef<string | null>(null)
 
   const updateLocalDraft = useCallback(
     (updater: (prev: ConsultationDraft) => ConsultationDraft) => {
@@ -97,6 +98,14 @@ export function CaseBuilderPanel({
     autoSuggestedRef.current = new Set()
     lastSuggestedRef.current = []
   }, [draft.consultationId])
+
+  useEffect(() => {
+    if (readOnly) return
+    if (localDraft.patientId) return
+    if (autoPromptPatientRef.current === localDraft.consultationId) return
+    autoPromptPatientRef.current = localDraft.consultationId
+    setCreatePatientOpen(true)
+  }, [localDraft.consultationId, localDraft.patientId, readOnly])
 
   useEffect(() => {
     if (readOnly) return

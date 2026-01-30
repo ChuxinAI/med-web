@@ -67,6 +67,9 @@ export function ChatPage() {
   const candidateSnapshotRef = useRef<typeof suggestion | null>(null)
   const draftSnapshotRef = useRef<ConsultationDraft | null>(null)
   const createInFlightRef = useRef(false)
+  const forceNewRef = useRef(false)
+  const activeSessionRef = useRef(0)
+  const activeConsultationRef = useRef<string | null>(null)
 
   const queryClient = useQueryClient()
   const { data: currentUser } = useCurrentUser('doctor')
@@ -125,6 +128,8 @@ export function ChatPage() {
     setReasoningConfirmedSymptoms([])
     candidateSnapshotRef.current = null
     draftSnapshotRef.current = null
+    activeSessionRef.current += 1
+    activeConsultationRef.current = consultationId
   }, [consultationId])
 
   useEffect(() => {
@@ -156,6 +161,7 @@ export function ChatPage() {
     if (createConsultationPromise) {
       const existingId = await createConsultationPromise
       setConsultationId(existingId)
+      forceNewRef.current = false
       return
     }
     if (createInFlightRef.current || createConsultation.isPending) return
@@ -166,6 +172,9 @@ export function ChatPage() {
         .then((res) => res.consultationId)
       const newId = await createConsultationPromise
       setConsultationId(newId)
+      clearCachedSuggestion(newId)
+      clearReasoningState(newId)
+      forceNewRef.current = false
     } finally {
       createInFlightRef.current = false
       createConsultationPromise = null
@@ -174,6 +183,7 @@ export function ChatPage() {
 
   useEffect(() => {
     if (consultationId) return
+    if (forceNewRef.current) return
     const last = localStorage.getItem(lastConsultationStorageKey)
     if (last) {
       setConsultationId(last)
@@ -424,6 +434,10 @@ export function ChatPage() {
     const content = input.trim()
     if (!content || pending) return
     if (!consultationId) return
+    const sessionToken = activeSessionRef.current
+    const sessionConsultationId = consultationId
+    const isStale = () =>
+      activeSessionRef.current !== sessionToken || activeConsultationRef.current !== sessionConsultationId
     const draftSnapshot = draftSnapshotRef.current ?? draft
     if (!draftSnapshot?.patientId) {
       setNotice({ tone: 'error', message: '请先关联患者后再发送问诊对话。' })
@@ -469,11 +483,13 @@ export function ChatPage() {
           },
         })
       } catch {
-        setOptimisticMessages((prev) => prev.filter((message) => message.id !== tempMessage.id))
-        setStreamingMessage(null)
-        setStreamingMatchId(null)
-        setCandidatePending(false)
-        setPending(false)
+        if (!isStale()) {
+          setOptimisticMessages((prev) => prev.filter((message) => message.id !== tempMessage.id))
+          setStreamingMessage(null)
+          setStreamingMatchId(null)
+          setCandidatePending(false)
+          setPending(false)
+        }
         return
       }
     }
@@ -483,6 +499,7 @@ export function ChatPage() {
         content,
         onDelta: (delta) => {
           if (!delta) return
+          if (isStale()) return
           setStreamingMessage((prev) =>
             prev && prev.id === streamMessage.id
               ? { ...prev, content: `${prev.content}${delta}` }
@@ -490,6 +507,7 @@ export function ChatPage() {
           )
         },
         onDone: (payload) => {
+          if (isStale()) return
           const finalText = extractAssistantContent(payload)
           setStreamingMessage((prev) =>
             prev && prev.id === streamMessage.id
@@ -502,23 +520,32 @@ export function ChatPage() {
           )
         },
         onError: () => {
+          if (isStale()) return
           setStreamingMessage(null)
           setStreamingMatchId(null)
           setCandidatePending(false)
         },
       })
     } catch {
-      setOptimisticMessages((prev) => prev.filter((message) => message.id !== tempMessage.id))
-      setStreamingMessage(null)
-      setStreamingMatchId(null)
-      setCandidatePending(false)
+      if (!isStale()) {
+        setOptimisticMessages((prev) => prev.filter((message) => message.id !== tempMessage.id))
+        setStreamingMessage(null)
+        setStreamingMatchId(null)
+        setCandidatePending(false)
+      }
     } finally {
-      setPending(false)
+      if (!isStale()) {
+        setPending(false)
+      }
     }
   }
 
   const handleAdoptDisease = async (disease: Disease) => {
     if (!consultationId || !draft || adoptedSummaryStream.isPending || adoptedPending) return
+    const sessionToken = activeSessionRef.current
+    const sessionConsultationId = consultationId
+    const isStale = () =>
+      activeSessionRef.current !== sessionToken || activeConsultationRef.current !== sessionConsultationId
     const adoptContent = `采纳病症：${disease.name}`
     const adoptMessage: CaseMessage = {
       id: `adopt-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -560,6 +587,7 @@ export function ChatPage() {
         message: adoptContent,
         onDelta: (delta) => {
           if (!delta) return
+          if (isStale()) return
           setAdoptedStreamingMessage((prev) =>
             prev && prev.id === streamMessage.id
               ? { ...prev, content: `${prev.content}${delta}` }
@@ -567,6 +595,7 @@ export function ChatPage() {
           )
         },
         onDone: (payload) => {
+          if (isStale()) return
           const normalized = normalizeDialoguePayload(payload)
           const payloadReply =
             normalized && typeof normalized === 'object' && ('reply' in normalized || 'replay' in normalized)
@@ -592,18 +621,25 @@ export function ChatPage() {
           setAdoptedPending(false)
         },
         onError: () => {
+          if (isStale()) return
           setAdoptedStreamingMessage(null)
           setAdoptedPending(false)
         },
       })
     } catch {
-      setAdoptedStreamingMessage(null)
-      setAdoptedPending(false)
+      if (!isStale()) {
+        setAdoptedStreamingMessage(null)
+        setAdoptedPending(false)
+      }
     }
   }
 
   const handleRequestDecision = async () => {
     if (!consultationId || decisionStream.isPending || decisionPending) return
+    const sessionToken = activeSessionRef.current
+    const sessionConsultationId = consultationId
+    const isStale = () =>
+      activeSessionRef.current !== sessionToken || activeConsultationRef.current !== sessionConsultationId
     const previousDecisionMessage = decisionStreamingMessage
     setDecisionReplyContent(null)
     setDecisionReplyId(null)
@@ -635,8 +671,10 @@ export function ChatPage() {
           },
         })
       } catch {
-        setDecisionPending(false)
-        setDecisionStreamingMessage(previousDecisionMessage)
+        if (!isStale()) {
+          setDecisionPending(false)
+          setDecisionStreamingMessage(previousDecisionMessage)
+        }
         return
       }
     }
@@ -646,6 +684,7 @@ export function ChatPage() {
         message: null,
         onDelta: (delta) => {
           if (!delta) return
+          if (isStale()) return
           setDecisionStreamingMessage((prev) =>
             prev && prev.id === streamMessage.id
               ? { ...prev, content: `${prev.content}${delta}` }
@@ -653,6 +692,7 @@ export function ChatPage() {
           )
         },
         onDone: (payload) => {
+          if (isStale()) return
           const payloadReply =
             payload && typeof payload === 'object' && 'reply' in payload
               ? String((payload as { reply?: string }).reply ?? '')
@@ -671,22 +711,31 @@ export function ChatPage() {
           setDecisionReplyId(streamMessage.id)
         },
         onError: () => {
+          if (isStale()) return
           setDecisionStreamingMessage(null)
           setDecisionReplyContent(null)
           setDecisionReplyId(null)
         },
       })
     } catch {
-      setDecisionStreamingMessage(null)
-      setDecisionReplyContent(null)
-      setDecisionReplyId(null)
+      if (!isStale()) {
+        setDecisionStreamingMessage(null)
+        setDecisionReplyContent(null)
+        setDecisionReplyId(null)
+      }
     } finally {
-      setDecisionPending(false)
+      if (!isStale()) {
+        setDecisionPending(false)
+      }
     }
   }
 
   const handleAdoptDecisionReply = async (content: string) => {
     if (!consultationId || !draft) return
+    const sessionToken = activeSessionRef.current
+    const sessionConsultationId = consultationId
+    const isStale = () =>
+      activeSessionRef.current !== sessionToken || activeConsultationRef.current !== sessionConsultationId
     const text = content.trim()
     if (!text) return
     setDecisionAdoptError(null)
@@ -694,6 +743,7 @@ export function ChatPage() {
     const previousDraft = draftSnapshotRef.current ?? draft
     try {
       const items = await extractDiseaseFormula.mutateAsync({ text })
+      if (isStale()) return
       const extracted = items.find(
         (item) => (item.disease && item.disease.trim()) || (item.formula && item.formula.trim()),
       )
@@ -731,18 +781,24 @@ export function ChatPage() {
         draftSnapshotRef.current = normalized
         queryClient.setQueryData(['consultation', consultationId, 'draft'], normalized)
       } catch (error) {
-        setDecisionAdoptError(
-          error instanceof Error ? error.message : '保存失败，请稍后重试',
-        )
-        queryClient.setQueryData(['consultation', consultationId, 'draft'], previousDraft)
-        draftSnapshotRef.current = previousDraft
+        if (!isStale()) {
+          setDecisionAdoptError(
+            error instanceof Error ? error.message : '保存失败，请稍后重试',
+          )
+          queryClient.setQueryData(['consultation', consultationId, 'draft'], previousDraft)
+          draftSnapshotRef.current = previousDraft
+        }
       }
     } catch (error) {
-      setDecisionAdoptError(
-        error instanceof Error ? error.message : '抽取失败，请稍后重试',
-      )
+      if (!isStale()) {
+        setDecisionAdoptError(
+          error instanceof Error ? error.message : '抽取失败，请稍后重试',
+        )
+      }
     } finally {
-      setDecisionAdopting(false)
+      if (!isStale()) {
+        setDecisionAdopting(false)
+      }
     }
   }
 
@@ -751,6 +807,8 @@ export function ChatPage() {
       setNotice({ tone: 'info', message: '当前问诊为空，无需开启新问诊。' })
       return
     }
+    forceNewRef.current = true
+    localStorage.removeItem(lastConsultationStorageKey)
     if (consultationId) {
       clearCachedSuggestion(consultationId)
       clearReasoningState(consultationId)

@@ -145,8 +145,46 @@ export function ConsultationCandidatePanel({
     const raw = [...normalizedUserSymptoms, ...yesSymptoms, ...noSymptoms]
     return new Set(raw.map(normalizeSymptom).filter(Boolean))
   }, [normalizedUserSymptoms, noSymptoms, yesSymptoms])
+  const lastNoSymptom = useMemo(() => {
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      if (history[i].answer === 'no') {
+        const normalized = normalizeSymptom(history[i].symptom)
+        return normalized || null
+      }
+    }
+    return null
+  }, [history])
+  const prioritySymptoms = useMemo(() => {
+    if (!lastNoSymptom) return null
+    const set = new Set<string>()
+    symptomDetailMap.forEach((detail) => {
+      const allSymptoms = expandSymptoms(detail.symptoms ?? [])
+      if (allSymptoms.includes(lastNoSymptom)) return
+      const unmatched = expandSymptoms(detail.unmatchedSymptoms ?? [])
+      unmatched.forEach((symptom) => {
+        if (!symptom) return
+        set.add(symptom)
+      })
+    })
+    return set.size > 0 ? set : null
+  }, [lastNoSymptom, symptomDetailMap])
   const activeAskSymptom = useMemo(() => {
     if (history.length >= MAX_REASONING_TURNS) return null
+    if (prioritySymptoms) {
+      for (const group of pendingSymptomGroups) {
+        if (group.some((symptom) => confirmedSet.has(symptom))) continue
+        const nextSymptom = group.find(
+          (symptom) => !askedSet.has(symptom) && prioritySymptoms.has(symptom),
+        )
+        if (nextSymptom) return nextSymptom
+      }
+      if (pendingSymptomGroups.length === 0) {
+        const nextSymptom = pendingSymptoms.find(
+          (symptom) => !askedSet.has(symptom) && prioritySymptoms.has(symptom),
+        )
+        if (nextSymptom) return nextSymptom
+      }
+    }
     for (const group of pendingSymptomGroups) {
       if (group.some((symptom) => confirmedSet.has(symptom))) continue
       const nextSymptom = group.find((symptom) => !askedSet.has(symptom))
@@ -157,7 +195,14 @@ export function ConsultationCandidatePanel({
       if (nextSymptom) return nextSymptom
     }
     return null
-  }, [askedSet, confirmedSet, history.length, pendingSymptomGroups, pendingSymptoms])
+  }, [
+    askedSet,
+    confirmedSet,
+    history.length,
+    pendingSymptomGroups,
+    pendingSymptoms,
+    prioritySymptoms,
+  ])
   const persistenceKey = storageKey ? `consultation-reasoning:${storageKey}` : null
   const baseCandidateKey = useMemo(() => {
     if (candidates.length === 0) return null
