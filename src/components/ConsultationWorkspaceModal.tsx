@@ -15,6 +15,7 @@ import {
 import type { Citation, CaseMessage, Disease } from '../types'
 import { Card } from './Card'
 import { CaseChatBubble } from './CaseChatBubble'
+import { CaseBuilderModal } from './CaseBuilderModal'
 import { CaseBuilderPanel } from './CaseBuilderPanel'
 import { SourcePreviewModal } from './SourcePreviewModal'
 import { consultationGuideMessage } from '../lib/consultationGuide'
@@ -40,6 +41,7 @@ export function ConsultationWorkspaceModal({
   onClose: () => void
 }) {
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null)
+  const [casePanelOpen, setCasePanelOpen] = useState(false)
 
   const { data: patients } = useDoctorPatients()
   const { data: catalog } = useCatalog()
@@ -73,6 +75,34 @@ export function ConsultationWorkspaceModal({
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   const canSend = useMemo(() => input.trim().length > 0 && !pending, [input, pending])
+  const caseBuilder = !consultationId || !draft ? (
+    <div className="text-sm text-slate-600">正在加载...</div>
+  ) : (
+    <CaseBuilderPanel
+      consultationId={consultationId}
+      draft={draft}
+      patients={patients ?? []}
+      suggestedSymptoms={suggestedSymptoms}
+      saving={updateDraft.isPending}
+      readOnly={readOnly}
+      onCreatePatient={(input) => createPatient.mutateAsync(input)}
+      onSaveDraft={async (next) => {
+        await updateDraft.mutateAsync({
+          consultationId,
+          patch: {
+            patientId: next.patientId,
+            symptoms: next.symptoms,
+            diagnosis: next.diagnosis,
+            formulaName: next.formulaName,
+            formulaDetail: next.formulaDetail,
+            usageNote: next.usageNote,
+            note: next.note,
+            status: next.status,
+          },
+        })
+      }}
+    />
+  )
   const transcript = useMemo(() => {
     return (messages ?? [])
       .concat(adoptedUserMessages)
@@ -316,9 +346,9 @@ export function ConsultationWorkspaceModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
       <button type="button" onClick={onClose} className="absolute inset-0 bg-black/30" aria-label="关闭问诊" />
-      <div className="relative flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl">
+      <div className="relative flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:h-[90vh] sm:rounded-3xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">{title ?? (readOnly ? '问诊查看（只读）' : '问诊查看')}</p>
@@ -333,13 +363,23 @@ export function ConsultationWorkspaceModal({
           </button>
         </div>
 
-        <div className="grid flex-1 min-h-0 grid-cols-5 gap-5 bg-slate-50 p-5">
-          <div className="col-span-4 flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white/80 shadow-soft-card">
-            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+        <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 bg-slate-50 p-4 sm:gap-5 sm:p-5 lg:grid-cols-5">
+          <div className="col-span-1 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white/80 shadow-soft-card sm:rounded-3xl lg:col-span-4">
+            <div className="flex items-center justify-between px-5 pt-4 lg:hidden">
+              <span className="text-sm font-semibold text-ink">问诊对话</span>
+              <button
+                type="button"
+                onClick={() => setCasePanelOpen(true)}
+                className="inline-flex h-8 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                问诊记录
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 pt-4 sm:px-6 sm:py-6">
               <div className="mx-auto w-full max-w-6xl">
                 <div className="relative">
                   <div className="flex w-full max-w-3xl flex-col gap-4 lg:mx-auto">
-	                    <CaseChatBubble key="guide" message={consultationGuideMessage} onOpenCitation={(c) => setSelectedCitation(c)} />
+                    <CaseChatBubble key="guide" message={consultationGuideMessage} onOpenCitation={(c) => setSelectedCitation(c)} />
                     {transcript.map((m) => (
                       <CaseChatBubble
                         key={m.id}
@@ -377,8 +417,8 @@ export function ConsultationWorkspaceModal({
               </div>
             </div>
 
-            <div className="border-t border-slate-100 bg-white/80 px-6 py-4 backdrop-blur">
-              <div className="mx-auto flex w-full max-w-3xl items-stretch gap-3">
+            <div className="border-t border-slate-100 bg-white/80 px-5 py-4 backdrop-blur sm:px-6">
+              <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-stretch">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -397,7 +437,7 @@ export function ConsultationWorkspaceModal({
                   type="button"
                   onClick={() => void send()}
                   disabled={readOnly || !canSend}
-                  className="min-h-[52px] w-28 self-stretch rounded-2xl bg-primary-600 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700 disabled:opacity-60"
+                  className="h-[40px] min-h-[40px] flex-1 rounded-2xl bg-primary-600 text-sm font-semibold text-white shadow-soft-card transition hover:bg-primary-700 disabled:opacity-60 lg:h-[52px] lg:min-h-[52px] lg:w-28 lg:flex-none"
                 >
                   发送
                 </button>
@@ -405,46 +445,22 @@ export function ConsultationWorkspaceModal({
             </div>
           </div>
 
-          <div className="col-span-1 flex min-h-0 flex-col">
+          <div className="hidden min-h-0 flex-col lg:flex lg:col-span-1">
             <Card
               title="问诊记录"
               className="flex-1 min-h-0 flex flex-col"
               bodyClassName="flex-1 min-h-0 overflow-y-auto"
             >
-              {!draft ? (
-                <div className="text-sm text-slate-600">正在加载...</div>
-              ) : (
-                <CaseBuilderPanel
-                  consultationId={consultationId}
-                  draft={draft}
-                  patients={patients ?? []}
-                  suggestedSymptoms={suggestedSymptoms}
-                  saving={updateDraft.isPending}
-                  readOnly={readOnly}
-                  onCreatePatient={(input) => createPatient.mutateAsync(input)}
-                  onSaveDraft={async (next) => {
-                    await updateDraft.mutateAsync({
-                      consultationId,
-                      patch: {
-                        patientId: next.patientId,
-                        symptoms: next.symptoms,
-                        diagnosis: next.diagnosis,
-                        formulaName: next.formulaName,
-                        formulaDetail: next.formulaDetail,
-                        usageNote: next.usageNote,
-                        note: next.note,
-                        status: next.status,
-                      },
-                    })
-                  }}
-                />
-              )}
+              {caseBuilder}
             </Card>
           </div>
         </div>
       </div>
 
       <SourcePreviewModal open={Boolean(selectedCitation)} citation={selectedCitation} onClose={() => setSelectedCitation(null)} />
+      <CaseBuilderModal open={casePanelOpen} onClose={() => setCasePanelOpen(false)}>
+        {caseBuilder}
+      </CaseBuilderModal>
     </div>,
     document.body,
   )

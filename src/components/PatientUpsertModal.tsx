@@ -49,15 +49,7 @@ export function PatientUpsertModal({
       setError('请输入患者年龄。')
       return
     }
-    if (!region.trim()) {
-      setError('请选择患者地区。')
-      return
-    }
-    if (!phone.trim()) {
-      setError('请输入患者电话。')
-      return
-    }
-    if (!phonePattern.test(phone.trim())) {
+    if (phone.trim() && !phonePattern.test(phone.trim())) {
       setError('电话需为 11 位数字。')
       return
     }
@@ -97,7 +89,7 @@ export function PatientUpsertModal({
   }
 
   const content = (
-    <div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl">
+    <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:rounded-3xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <p className="text-sm font-semibold text-ink">新建患者</p>
@@ -112,7 +104,7 @@ export function PatientUpsertModal({
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto p-5">
+        <div className="max-h-[70vh] overflow-y-auto p-5 sm:max-h-[72vh]">
           <div className="grid grid-cols-1 gap-4 text-sm text-slate-700 sm:grid-cols-2">
             <label className="col-span-2 space-y-2">
               <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
@@ -159,15 +151,11 @@ export function PatientUpsertModal({
               />
             </label>
             <label className="space-y-2">
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
-                地区 <span className="text-rose-500">*</span>
-              </span>
+              <span className="text-xs font-semibold text-slate-600">地区</span>
               <RegionSelect value={region} onChange={setRegion} />
             </label>
             <label className="space-y-2">
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
-                电话 <span className="text-rose-500">*</span>
-              </span>
+              <span className="text-xs font-semibold text-slate-600">电话</span>
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -225,9 +213,9 @@ export function PatientUpsertModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:items-start sm:p-6">
       <button type="button" onClick={onClose} className="absolute inset-0 bg-black/30" aria-label="关闭新建患者" />
-      <div className="relative my-10 w-full max-w-3xl">{content}</div>
+      <div className="relative my-4 w-full max-w-[96vw] sm:my-10 sm:max-w-3xl">{content}</div>
     </div>,
     document.body,
   )
