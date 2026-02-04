@@ -79,6 +79,14 @@ function DiseaseEditForm({
     >,
   ) => Promise<void>
 }) {
+  const normalizeTypeCode = (value?: string) => {
+    const code = (value ?? '').trim().toLowerCase()
+    if (code === '1' || code === 'disease') return 'disease'
+    if (code === '2' || code === 'syndrome') return 'syndrome'
+    if (code === '3' || code === 'symptom') return 'symptom'
+    return value ?? ''
+  }
+
   const typeOptions = [
     { value: '', label: '未选择' },
     { value: 'disease', label: '疾病' },
@@ -88,7 +96,7 @@ function DiseaseEditForm({
   const [editing, setEditing] = useState(() => ({
     name: seed.name ?? '',
     typeName: seed.typeName ?? '',
-    typeCode: seed.typeCode ?? '',
+    typeCode: normalizeTypeCode(seed.typeCode),
     symptoms: seed.symptoms ?? '',
     differentiation: seed.differentiation ?? '',
     formula: seed.formula ?? '',
@@ -123,7 +131,7 @@ function DiseaseEditForm({
       await onSave({
         name: editing.name.trim(),
         typeName: editing.typeName.trim(),
-        typeCode: editing.typeCode.trim(),
+        typeCode: normalizeTypeCode(editing.typeCode).trim(),
         symptoms: editing.symptoms.trim(),
         differentiation: editing.differentiation.trim(),
         formula: editing.formula.trim(),
@@ -158,7 +166,7 @@ function DiseaseEditForm({
               </span>
               <select
                 value={editing.typeCode}
-                onChange={(e) => setEditing((p) => ({ ...p, typeCode: e.target.value }))}
+                onChange={(e) => setEditing((p) => ({ ...p, typeCode: normalizeTypeCode(e.target.value) }))}
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
               >
                 {typeOptions.map((option) => (
